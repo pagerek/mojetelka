@@ -19,19 +19,11 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,12 +31,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import cz.webshare.tv.model.CatalogItem
 import cz.webshare.tv.model.CatalogSection
 import cz.webshare.tv.model.MediaType
@@ -57,6 +46,7 @@ import cz.webshare.tv.ui.components.TvButton
 import cz.webshare.tv.ui.components.TvColors
 import cz.webshare.tv.ui.components.TvContinueWatchingCard
 import cz.webshare.tv.ui.components.TvNavTabItem
+import cz.webshare.tv.ui.components.tvBringIntoViewContainer
 import cz.webshare.tv.ui.components.TvPosterCard
 
 @Composable
@@ -181,95 +171,11 @@ fun HomeCatalogScreen(
         }
     }
 
-    val displayedHero = heroItem?.takeIf { filterType == null || it.type == filterType }
-        ?: filteredSections.firstOrNull()?.items?.firstOrNull()
-
-    val isHeroInMyList = remember(displayedHero?.id, myList) {
-        displayedHero != null && myList.any { it.id == displayedHero.id }
-    }
-
-    var usePosterFallback by remember(displayedHero?.id) { mutableStateOf(false) }
-    var backdropFailed by remember(displayedHero?.id) { mutableStateOf(false) }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(TvColors.Background)
     ) {
-        // Full-Bleed Netflix Cinematic Billboard Backdrop with automatic fallback to poster & ambient gradient
-        if (displayedHero != null) {
-            val bgUrl = if (usePosterFallback) displayedHero.posterUrl else (displayedHero.backdropUrl ?: displayedHero.posterUrl)
-            if (!bgUrl.isNullOrEmpty() && !backdropFailed) {
-                AsyncImage(
-                    model = bgUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    onError = {
-                        if (!usePosterFallback && !displayedHero.posterUrl.isNullOrEmpty() && displayedHero.posterUrl != displayedHero.backdropUrl) {
-                            usePosterFallback = true
-                        } else {
-                            backdropFailed = true
-                        }
-                    },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .fillMaxWidth(0.75f)
-                        .height(350.dp)
-                )
-            } else {
-                // Subtle cinematic red/charcoal ambient glow when no image is available
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .fillMaxWidth(0.75f)
-                        .height(350.dp)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(
-                                    Color(0x33E50914),
-                                    Color(0x1A1E1E1E),
-                                    TvColors.Background
-                                ),
-                                radius = 900f
-                            )
-                        )
-                )
-            }
-            // Deep Left-to-Right Cinematic Vignette so text on the left is 100% legible
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(355.dp)
-                    .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(
-                                TvColors.Background,
-                                TvColors.Background,
-                                Color(0xE60A0A0A),
-                                Color(0x880A0A0A),
-                                Color(0x220A0A0A)
-                            )
-                        )
-                    )
-            )
-            // Smooth Bottom Vignette blending into the first poster row
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(355.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0x330A0A0A),
-                                Color(0x660A0A0A),
-                                Color(0xDD0A0A0A),
-                                TvColors.Background
-                            )
-                        )
-                    )
-            )
-        }
-
         if (isLoading && filteredSections.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -288,21 +194,8 @@ fun HomeCatalogScreen(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 42.dp)
+                contentPadding = PaddingValues(top = 12.dp, bottom = 42.dp)
             ) {
-                // Redesigned Netflix Hero Billboard Spotlight for the featured title
-                if (displayedHero != null) {
-                    item(key = "hero_banner") {
-                        HeroSpotlightSection(
-                            item = displayedHero,
-                            isInMyList = isHeroInMyList,
-                            onPrimaryPlay = { onQuickPlayHero(displayedHero) },
-                            onOpenDetail = { onOpenDetail(displayedHero) },
-                            onToggleMyList = { onToggleMyList(displayedHero) }
-                        )
-                    }
-                }
-
                 // Continue Watching ("Pokračovat ve sledování")
                 val relevantHistory = if (filterType == null) {
                     watchHistory
@@ -312,7 +205,11 @@ fun HomeCatalogScreen(
 
                 if (relevantHistory.isNotEmpty()) {
                     item(key = "continue_watching") {
-                        Column(modifier = Modifier.padding(top = 2.dp, bottom = 6.dp)) {
+                        Column(
+                            modifier = Modifier
+                                .tvBringIntoViewContainer(topPadding = 12.dp, bottomPadding = 24.dp)
+                                .padding(top = 2.dp, bottom = 6.dp)
+                        ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -356,7 +253,11 @@ fun HomeCatalogScreen(
 
                 // Horizontal Movie & Series Poster Rows
                 itemsIndexed(filteredSections, key = { _, sec -> sec.id }) { _, section ->
-                    Column(modifier = Modifier.padding(top = 6.dp, bottom = 4.dp)) {
+                    Column(
+                        modifier = Modifier
+                            .tvBringIntoViewContainer(topPadding = 12.dp, bottomPadding = 24.dp)
+                            .padding(top = 6.dp, bottom = 4.dp)
+                    ) {
                         Text(
                             text = section.title,
                             color = Color(0xFFE5E5E5),
@@ -386,187 +287,6 @@ fun HomeCatalogScreen(
     }
 }
 
-/**
- * Authentic Netflix TV Hero Billboard for the featured first/focused movie or series on Home.
- */
-@Composable
-private fun HeroSpotlightSection(
-    item: CatalogItem,
-    isInMyList: Boolean,
-    onPrimaryPlay: () -> Unit,
-    onOpenDetail: () -> Unit,
-    onToggleMyList: () -> Unit
-) {
-    val matchScore = remember(item.id, item.rating) {
-        val r = item.rating ?: 8.2
-        (r * 10).toInt().coerceIn(78, 99)
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 32.dp, end = 32.dp, top = 8.dp, bottom = 10.dp)
-    ) {
-        // 1. Netflix "W" Original-style Header Brand Tag
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(18.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(TvColors.NetflixRed),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "W",
-                    color = Color.White,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Black
-                )
-            }
-            Text(
-                text = if (item.type == MediaType.SERIES) "SERIÁL WEBSHARE" else "FILM WEBSHARE",
-                color = Color(0xFFD4D4D4),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 2.2.sp
-            )
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // 2. Large Cinematic Billboard Title
-        Text(
-            text = item.title,
-            color = Color.White,
-            fontSize = 34.sp,
-            fontWeight = FontWeight.Black,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.width(640.dp)
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // 3. Netflix Metadata Line: Green Match % + Year + Maturity/Runtime + 4K/HD + CZ/EN Badges + Genre Dots
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Text(
-                text = "$matchScore% shoda",
-                color = TvColors.VipGreen,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.ExtraBold
-            )
-
-            if (item.year != null) {
-                Text(
-                    text = item.year.toString(),
-                    color = Color(0xFFE5E5E5),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-
-            if (item.runtimeMinutes != null && item.runtimeMinutes > 0) {
-                val hrs = item.runtimeMinutes / 60
-                val mins = item.runtimeMinutes % 60
-                val formattedRuntime = if (hrs > 0) "${hrs}h ${mins}m" else "${mins}m"
-                Text(
-                    text = formattedRuntime,
-                    color = Color(0xFFB3B3B3),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
-            // Crisp Outlined HD / 4K Quality Box (Netflix style)
-            Box(
-                modifier = Modifier
-                    .border(1.dp, Color(0x88FFFFFF), RoundedCornerShape(3.dp))
-                    .padding(horizontal = 5.dp, vertical = 1.dp)
-            ) {
-                Text(
-                    text = "4K • HD",
-                    color = Color.White,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.ExtraBold
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .border(1.dp, Color(0x66FFFFFF), RoundedCornerShape(3.dp))
-                    .padding(horizontal = 5.dp, vertical = 1.dp)
-            ) {
-                Text(
-                    text = "CZ • EN",
-                    color = Color(0xFFE5E5E5),
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            if (item.genres.isNotEmpty()) {
-                Text(
-                    text = item.genres.take(3).joinToString(" • "),
-                    color = Color(0xFFD4D4D4),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // 4. Synopsis
-        Text(
-            text = item.overview,
-            color = Color(0xFFD4D4D4),
-            fontSize = 13.sp,
-            lineHeight = 18.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.width(560.dp)
-        )
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // 5. Netflix Hero Action Bar: Play + More Info / Streams + My List
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TvButton(
-                text = if (item.type == MediaType.SERIES) "Přehrát seriál" else "Přehrát",
-                icon = Icons.Default.PlayArrow,
-                isPrimary = true,
-                paddingValues = PaddingValues(horizontal = 22.dp, vertical = 10.dp),
-                onClick = onPrimaryPlay
-            )
-            TvButton(
-                text = "Další informace a zdroje",
-                icon = Icons.Default.Info,
-                isPrimary = false,
-                paddingValues = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
-                onClick = onOpenDetail
-            )
-            TvButton(
-                text = if (isInMyList) "V mém seznamu" else "Můj seznam",
-                icon = if (isInMyList) Icons.Default.Check else Icons.Default.Add,
-                isSelected = isInMyList,
-                paddingValues = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-                onClick = onToggleMyList
-            )
-        }
-    }
-}
-
 @Composable
 fun MyListScreen(
     myList: List<CatalogItem>,
@@ -588,81 +308,91 @@ fun MyListScreen(
         ) {
             if (watchHistory.isNotEmpty()) {
                 item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    Column(
+                        modifier = Modifier.tvBringIntoViewContainer(
+                            topPadding = 12.dp,
+                            bottomPadding = 24.dp
+                        )
                     ) {
-                        Text(
-                            text = "Rozkoukané filmy a epizody",
-                            color = Color.White,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Podrž OK na kartě pro další možnosti",
-                            color = TvColors.TextSecondary,
-                            fontSize = 12.sp
-                        )
-                    }
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        items(
-                            watchHistory,
-                            key = { "${it.mediaId}_${it.seasonNumber}_${it.episodeNumber}" }
-                        ) { hItem ->
-                            TvContinueWatchingCard(
-                                item = hItem,
-                                onClick = { onResumeHistory(hItem) },
-                                onPlayFromBeginning = { onRestartHistoryFromBeginning(hItem) },
-                                onMarkAsWatched = { onMarkHistoryWatched(hItem) },
-                                onRemoveFromRow = { onRemoveHistoryItem(hItem) },
-                                onOpenDetail = { onOpenHistoryDetail(hItem) }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Rozkoukané filmy a epizody",
+                                color = Color.White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Podrž OK na kartě pro další možnosti",
+                                color = TvColors.TextSecondary,
+                                fontSize = 12.sp
                             )
                         }
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            items(
+                                watchHistory,
+                                key = { "${it.mediaId}_${it.seasonNumber}_${it.episodeNumber}" }
+                            ) { hItem ->
+                                TvContinueWatchingCard(
+                                    item = hItem,
+                                    onClick = { onResumeHistory(hItem) },
+                                    onPlayFromBeginning = { onRestartHistoryFromBeginning(hItem) },
+                                    onMarkAsWatched = { onMarkHistoryWatched(hItem) },
+                                    onRemoveFromRow = { onRemoveHistoryItem(hItem) },
+                                    onOpenDetail = { onOpenHistoryDetail(hItem) }
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(20.dp))
                     }
-                    Spacer(modifier = Modifier.height(20.dp))
                 }
             }
 
             item {
-                Text(
-                    text = "Můj seznam (${myList.size})",
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-            }
+                Column(
+                    modifier = Modifier.tvBringIntoViewContainer(
+                        topPadding = 12.dp,
+                        bottomPadding = 28.dp
+                    )
+                ) {
+                    Text(
+                        text = "Můj seznam (${myList.size})",
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
 
-            if (myList.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 32.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Tvůj seznam je zatím prázdný. U libovolného filmu nebo seriálu klikni na '+ Můj seznam'.",
-                            color = TvColors.TextSecondary,
-                            fontSize = 14.sp
-                        )
-                    }
-                }
-            } else {
-                item {
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        contentPadding = PaddingValues(vertical = 6.dp)
-                    ) {
-                        items(myList, key = { it.id }) { item ->
-                            TvPosterCard(
-                                item = item,
-                                onFocused = onFocusItem,
-                                onClick = onOpenDetail
+                    if (myList.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Tvůj seznam je zatím prázdný. U libovolného filmu nebo seriálu klikni na '+ Můj seznam'.",
+                                color = TvColors.TextSecondary,
+                                fontSize = 14.sp
                             )
+                        }
+                    } else {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            contentPadding = PaddingValues(vertical = 6.dp)
+                        ) {
+                            items(myList, key = { it.id }) { item ->
+                                TvPosterCard(
+                                    item = item,
+                                    onFocused = onFocusItem,
+                                    onClick = onOpenDetail
+                                )
+                            }
                         }
                     }
                 }

@@ -56,6 +56,8 @@ import cz.webshare.tv.model.UserPreferences
 import cz.webshare.tv.ui.components.TechBadgePill
 import cz.webshare.tv.ui.components.TvButton
 import cz.webshare.tv.ui.components.TvColors
+import cz.webshare.tv.ui.components.tvBringIntoViewContainer
+import cz.webshare.tv.ui.components.tvBringIntoViewPadding
 
 @Composable
 fun MediaDetailScreen(
@@ -143,6 +145,10 @@ fun MediaDetailScreen(
                 }
 
                 Row(
+                    modifier = Modifier.tvBringIntoViewPadding(
+                        topPadding = 28.dp,
+                        bottomPadding = 24.dp
+                    ),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
@@ -300,6 +306,10 @@ fun MediaDetailScreen(
                 }
 
                 Row(
+                    modifier = Modifier.tvBringIntoViewPadding(
+                        topPadding = 28.dp,
+                        bottomPadding = 24.dp
+                    ),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
@@ -400,28 +410,35 @@ fun MediaDetailScreen(
             // TV Series Seasons & Episodes Browser
             if (item.type == MediaType.SERIES && details.seasons.isNotEmpty()) {
                 item {
-                    Spacer(modifier = Modifier.height(28.dp))
-                    Text(
-                        text = "Série a epizody",
-                        color = Color.White,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Column(
+                        modifier = Modifier.tvBringIntoViewContainer(
+                            topPadding = 16.dp,
+                            bottomPadding = 20.dp
+                        )
+                    ) {
+                        Spacer(modifier = Modifier.height(28.dp))
+                        Text(
+                            text = "Série a epizody",
+                            color = Color.White,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                    // Season Tabs
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        items(details.seasons, key = { it.seasonNumber }) { season ->
-                            TvButton(
-                                text = "${season.name} (${season.episodeCount})",
-                                isSelected = season.seasonNumber == selectedSeasonNumber,
-                                paddingValues = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                                onClick = { onSelectSeason(season.seasonNumber) }
-                            )
+                        // Season Tabs
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            items(details.seasons, key = { it.seasonNumber }) { season ->
+                                TvButton(
+                                    text = "${season.name} (${season.episodeCount})",
+                                    isSelected = season.seasonNumber == selectedSeasonNumber,
+                                    paddingValues = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                                    onClick = { onSelectSeason(season.seasonNumber) }
+                                )
+                            }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
                 }
 
                 val seasonEpisodes = details.episodesBySeason[selectedSeasonNumber].orEmpty()

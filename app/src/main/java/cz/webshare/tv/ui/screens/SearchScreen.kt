@@ -58,6 +58,7 @@ import cz.webshare.tv.model.CatalogItem
 import cz.webshare.tv.ui.components.TechBadgePill
 import cz.webshare.tv.ui.components.TvButton
 import cz.webshare.tv.ui.components.TvColors
+import cz.webshare.tv.ui.components.tvBringIntoViewPadding
 import cz.webshare.tv.ui.components.TvPosterCard
 import kotlinx.coroutines.delay
 
@@ -398,15 +399,22 @@ fun SearchScreen(
                         columns = GridCells.Adaptive(minSize = 136.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        contentPadding = PaddingValues(bottom = 32.dp),
+                        contentPadding = PaddingValues(top = 8.dp, bottom = 40.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
                         items(results, key = { it.id }) { item ->
-                            TvPosterCard(
-                                item = item,
-                                onFocused = onFocusItem,
-                                onClick = onOpenDetail
-                            )
+                            Box(
+                                modifier = Modifier.tvBringIntoViewPadding(
+                                    topPadding = 16.dp,
+                                    bottomPadding = 32.dp
+                                )
+                            ) {
+                                TvPosterCard(
+                                    item = item,
+                                    onFocused = onFocusItem,
+                                    onClick = onOpenDetail
+                                )
+                            }
                         }
                     }
                 }

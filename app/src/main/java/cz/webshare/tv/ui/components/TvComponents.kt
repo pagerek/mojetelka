@@ -10,6 +10,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.relocation.BringIntoViewResponder
+import androidx.compose.foundation.relocation.bringIntoViewResponder
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,22 +35,27 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
@@ -972,4 +979,73 @@ fun TvIconButton(
             modifier = Modifier.size(20.dp)
         )
     }
+}
+
+/**
+ * Ensures that when any focusable child inside a section/card gains focus (e.g. via D-Pad),
+ * the parent LazyColumn scrolls to reveal the entire container (including section titles above
+ * and breathing room below), preventing headers from getting clipped when scrolling back up.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+fun Modifier.tvBringIntoViewContainer(
+    topPadding: Dp = 14.dp,
+    bottomPadding: Dp = 28.dp
+): Modifier = composed {
+    val density = LocalDensity.current
+    var containerSize by remember { mutableStateOf(IntSize.Zero) }
+    val topPx = with(density) { topPadding.toPx() }
+    val bottomPx = with(density) { bottomPadding.toPx() }
+
+    val responder = remember(topPx, bottomPx) {
+        object : BringIntoViewResponder {
+            override fun calculateRectForParent(localRect: Rect): Rect {
+                if (containerSize.height <= 0 || containerSize.width <= 0) {
+                    return localRect
+                }
+                return Rect(
+                    left = localRect.left,
+                    top = -topPx,
+                    right = localRect.right,
+                    bottom = containerSize.height.toFloat() + bottomPx
+                )
+            }
+
+            override suspend fun bringChildIntoView(localRect: () -> Rect?) = Unit
+        }
+    }
+
+    this
+        .onSizeChanged { containerSize = it }
+        .bringIntoViewResponder(responder)
+}
+
+/**
+ * Adds vertical/horizontal breathing room around a focusable item's bring-into-view rect
+ * so scaled focus borders and titles are never clipped at scrollable viewport edges.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+fun Modifier.tvBringIntoViewPadding(
+    topPadding: Dp = 16.dp,
+    bottomPadding: Dp = 28.dp
+): Modifier = composed {
+    val density = LocalDensity.current
+    val topPx = with(density) { topPadding.toPx() }
+    val bottomPx = with(density) { bottomPadding.toPx() }
+
+    val responder = remember(topPx, bottomPx) {
+        object : BringIntoViewResponder {
+            override fun calculateRectForParent(localRect: Rect): Rect {
+                return Rect(
+                    left = localRect.left,
+                    top = localRect.top - topPx,
+                    right = localRect.right,
+                    bottom = localRect.bottom + bottomPx
+                )
+            }
+
+            override suspend fun bringChildIntoView(localRect: () -> Rect?) = Unit
+        }
+    }
+
+    this.bringIntoViewResponder(responder)
 }

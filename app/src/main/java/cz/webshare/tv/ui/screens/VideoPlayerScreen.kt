@@ -1,5 +1,6 @@
 package cz.webshare.tv.ui.screens
 
+import android.graphics.Color as AndroidColor
 import android.view.KeyEvent
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -7,7 +8,9 @@ import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,12 +30,16 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,13 +69,14 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.SubtitleView
 import cz.webshare.tv.model.ParsedStream
 import cz.webshare.tv.ui.ActivePlaybackSession
 import cz.webshare.tv.ui.components.TechBadgePill
 import cz.webshare.tv.ui.components.TvButton
 import cz.webshare.tv.ui.components.TvColors
-import cz.webshare.tv.ui.components.TvIconButton
 import kotlinx.coroutines.delay
 
 data class EmbeddedTrackOption(
@@ -105,12 +113,14 @@ fun VideoPlayerScreen(
     var subtitleTracks by remember { mutableStateOf<List<EmbeddedTrackOption>>(emptyList()) }
     var subtitlesDisabled by remember { mutableStateOf(false) }
 
+    var subtitleSizeMode by remember { mutableIntStateOf(1) } // 0 = Malé, 1 = Střední, 2 = Velké
+    var subtitleStyleMode by remember { mutableIntStateOf(0) } // 0 = Bílé s obrysem, 1 = Žluté, 2 = Bílé s pozadím
+
     var isTimelineFocused by remember { mutableStateOf(false) }
     var seekFeedbackText by remember { mutableStateOf<String?>(null) }
 
     val rootFocusRequester = remember { FocusRequester() }
     val timelineFocusRequester = remember { FocusRequester() }
-    val playPauseFocusRequester = remember { FocusRequester() }
 
     val anyModalOpen = showAudioTrackModal || showSubtitleTrackModal || showQualityModal
 
@@ -390,8 +400,6 @@ fun VideoPlayerScreen(
                                 KeyEvent.KEYCODE_DPAD_DOWN -> {
                                     if (!showControls) {
                                         wakeControls(focusTimeline = true)
-                                    } else {
-                                        runCatching { playPauseFocusRequester.requestFocus() }
                                     }
                                     true
                                 }
@@ -436,6 +444,42 @@ fun VideoPlayerScreen(
             update = { view ->
                 if (view.player !== exoPlayer) {
                     view.player = exoPlayer
+                }
+                view.subtitleView?.let { sv ->
+                    val fraction = when (subtitleSizeMode) {
+                        0 -> SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * 0.8f
+                        2 -> SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * 1.3f
+                        else -> SubtitleView.DEFAULT_TEXT_SIZE_FRACTION
+                    }
+                    sv.setFractionalTextSize(fraction)
+
+                    val style = when (subtitleStyleMode) {
+                        1 -> CaptionStyleCompat(
+                            AndroidColor.YELLOW,
+                            AndroidColor.TRANSPARENT,
+                            AndroidColor.TRANSPARENT,
+                            CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                            AndroidColor.BLACK,
+                            null
+                        )
+                        2 -> CaptionStyleCompat(
+                            AndroidColor.WHITE,
+                            AndroidColor.argb(190, 0, 0, 0),
+                            AndroidColor.TRANSPARENT,
+                            CaptionStyleCompat.EDGE_TYPE_NONE,
+                            AndroidColor.TRANSPARENT,
+                            null
+                        )
+                        else -> CaptionStyleCompat(
+                            AndroidColor.WHITE,
+                            AndroidColor.TRANSPARENT,
+                            AndroidColor.TRANSPARENT,
+                            CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                            AndroidColor.BLACK,
+                            null
+                        )
+                    }
+                    sv.setStyle(style)
                 }
             },
             modifier = Modifier.fillMaxSize()
@@ -564,136 +608,123 @@ fun VideoPlayerScreen(
                     }
                 }
 
-                // Bottom Bar: Track/Quality Controls above & Play/Pause + Focusable Timeline at the very bottom
+                // Bottom Bar: Track/Audio/Subtitle Settings above & Merged Play/Pause + Timeline at the very bottom
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
                         .padding(horizontal = 36.dp, vertical = 20.dp)
                 ) {
-                    val hasSecondaryControls = audioTracks.size > 1 ||
-                        subtitleTracks.isNotEmpty() ||
-                        (session.resolutionResult != null && session.resolutionResult.groups.isNotEmpty()) ||
-                        session.nextEpisode != null
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            TvButton(
+                                text = if (audioTracks.size > 1) "Zvuk (${audioTracks.size})" else "Zvuk",
+                                icon = Icons.Default.VolumeUp,
+                                onClick = { showAudioTrackModal = true }
+                            )
 
-                    if (hasSecondaryControls) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                if (audioTracks.size > 1) {
-                                    TvButton(
-                                        text = "Zvuková stopa (${audioTracks.size})",
-                                        onClick = { showAudioTrackModal = true }
-                                    )
-                                }
+                            TvButton(
+                                text = if (subtitleTracks.isNotEmpty()) "Titulky (${subtitleTracks.size})" else "Titulky",
+                                icon = Icons.Default.Subtitles,
+                                onClick = { showSubtitleTrackModal = true }
+                            )
 
-                                if (subtitleTracks.isNotEmpty()) {
-                                    TvButton(
-                                        text = "Titulky (${subtitleTracks.size})",
-                                        onClick = { showSubtitleTrackModal = true }
-                                    )
-                                }
+                            if (session.resolutionResult != null && session.resolutionResult.groups.isNotEmpty()) {
+                                TvButton(
+                                    text = "Kvalita / Zdroj (${session.activeStream.quality.badge} • ${session.activeStream.language.badge})",
+                                    icon = Icons.Default.Settings,
+                                    onClick = { showQualityModal = true }
+                                )
+                            }
 
-                                if (session.resolutionResult != null && session.resolutionResult.groups.isNotEmpty()) {
-                                    TvButton(
-                                        text = "Kvalita / Zdroj (${session.activeStream.quality.badge} • ${session.activeStream.language.badge})",
-                                        icon = Icons.Default.Settings,
-                                        onClick = { showQualityModal = true }
-                                    )
-                                }
-
-                                if (session.nextEpisode != null) {
-                                    TvButton(
-                                        text = "Další díl (${session.nextEpisode.code})",
-                                        icon = Icons.Default.SkipNext,
-                                        isPrimary = true,
-                                        onClick = onNextEpisode
-                                    )
-                                }
+                            if (session.nextEpisode != null) {
+                                TvButton(
+                                    text = "Další díl (${session.nextEpisode.code})",
+                                    icon = Icons.Default.SkipNext,
+                                    isPrimary = true,
+                                    onClick = onNextEpisode
+                                )
                             }
                         }
-
-                        Spacer(modifier = Modifier.height(10.dp))
                     }
 
-                    // Bottom-most row: Icon-only Play/Pause button + Default-Focused Interactive Seek Timeline Bar
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Single Unified Focusable Element: Play/Pause Icon + Interactive Seek Timeline
                     val progressFraction = if (durationMs > 0L) {
                         (currentPosMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
                     } else 0f
+                    val timelineInteraction = remember { MutableInteractionSource() }
 
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isTimelineFocused) Color(0x16FFFFFF) else Color.Transparent)
+                            .border(
+                                width = if (isTimelineFocused) 1.dp else 0.dp,
+                                color = if (isTimelineFocused) Color(0x4DFFFFFF) else Color.Transparent,
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .focusRequester(timelineFocusRequester)
+                            .onFocusChanged { isTimelineFocused = it.isFocused }
+                            .clickable(
+                                interactionSource = timelineInteraction,
+                                indication = null,
+                                onClick = { togglePlayPause() }
+                            )
+                            .padding(horizontal = 12.dp, vertical = 9.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        TvIconButton(
-                            icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = if (isPlaying) "Pozastavit" else "Přehrát",
-                            modifier = Modifier.focusRequester(playPauseFocusRequester),
-                            onClick = { togglePlayPause() }
+                            tint = if (isTimelineFocused) Color.White else Color(0xFFE5E5E5),
+                            modifier = Modifier.size(22.dp)
                         )
 
-                        Row(
+                        Text(
+                            text = formatDurationMs(currentPosMs),
+                            color = if (isTimelineFocused) Color.White else Color(0xFFE5E5E5),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (isTimelineFocused) Color(0x44FFFFFF) else Color.Transparent)
-                                .border(
-                                    width = if (isTimelineFocused) 2.dp else 0.dp,
-                                    color = if (isTimelineFocused) Color.White else Color.Transparent,
-                                    shape = RoundedCornerShape(10.dp)
-                                )
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                                .focusRequester(timelineFocusRequester)
-                                .onFocusChanged { isTimelineFocused = it.isFocused }
-                                .focusable(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                .height(if (isTimelineFocused) 7.dp else 5.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0x44FFFFFF))
                         ) {
-                            Text(
-                                text = formatDurationMs(currentPosMs),
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-
                             Box(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .height(if (isTimelineFocused) 12.dp else 8.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(0x55FFFFFF))
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth(progressFraction)
-                                        .height(if (isTimelineFocused) 12.dp else 8.dp)
-                                        .background(TvColors.NetflixRed)
-                                )
-                            }
-
-                            Text(
-                                text = formatDurationMs(durationMs),
-                                color = if (isTimelineFocused) Color.White else TvColors.TextSecondary,
-                                fontSize = 14.sp,
-                                fontWeight = if (isTimelineFocused) FontWeight.Bold else FontWeight.Normal
+                                    .fillMaxWidth(progressFraction)
+                                    .height(if (isTimelineFocused) 7.dp else 5.dp)
+                                    .background(TvColors.NetflixRed)
                             )
                         }
+
+                        Text(
+                            text = formatDurationMs(durationMs),
+                            color = if (isTimelineFocused) Color(0xFFE5E5E5) else TvColors.TextSecondary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
                 }
             }
         }
 
-        // Embedded Audio Track Switcher Modal
+        // Audio Settings Modal (embedded audio track selector)
         if (showAudioTrackModal) {
-            TrackSelectorOverlay(
-                title = "Výběr zvukové stopy ve videu",
-                options = audioTracks,
-                includeOffOption = false,
-                isOffSelected = false,
+            AudioSettingsOverlay(
+                tracks = audioTracks,
                 onSelectTrack = { opt ->
                     val group = exoPlayer.currentTracks.groups.getOrNull(opt.groupIndex)
                     if (group != null) {
@@ -706,18 +737,17 @@ fun VideoPlayerScreen(
                     }
                     showAudioTrackModal = false
                 },
-                onSelectOff = {},
                 onDismiss = { showAudioTrackModal = false }
             )
         }
 
-        // Embedded Subtitle Track Switcher Modal
+        // Subtitle Settings Modal (track, on/off, text size, style)
         if (showSubtitleTrackModal) {
-            TrackSelectorOverlay(
-                title = "Výběr titulků ve videu",
-                options = subtitleTracks,
-                includeOffOption = true,
+            SubtitleSettingsOverlay(
+                tracks = subtitleTracks,
                 isOffSelected = subtitlesDisabled,
+                currentSizeMode = subtitleSizeMode,
+                currentStyleMode = subtitleStyleMode,
                 onSelectTrack = { opt ->
                     val group = exoPlayer.currentTracks.groups.getOrNull(opt.groupIndex)
                     if (group != null) {
@@ -740,6 +770,8 @@ fun VideoPlayerScreen(
                         .build()
                     showSubtitleTrackModal = false
                 },
+                onSelectSizeMode = { subtitleSizeMode = it },
+                onSelectStyleMode = { subtitleStyleMode = it },
                 onDismiss = { showSubtitleTrackModal = false }
             )
         }
@@ -760,13 +792,9 @@ fun VideoPlayerScreen(
 }
 
 @Composable
-private fun TrackSelectorOverlay(
-    title: String,
-    options: List<EmbeddedTrackOption>,
-    includeOffOption: Boolean,
-    isOffSelected: Boolean,
+private fun AudioSettingsOverlay(
+    tracks: List<EmbeddedTrackOption>,
     onSelectTrack: (EmbeddedTrackOption) -> Unit,
-    onSelectOff: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val firstFocusRequester = remember { FocusRequester() }
@@ -785,56 +813,181 @@ private fun TrackSelectorOverlay(
         Column(
             modifier = Modifier
                 .width(460.dp)
-                .clip(RoundedCornerShape(16.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(TvColors.SurfaceDark)
-                .border(1.dp, Color(0xFF2F354D), RoundedCornerShape(16.dp))
+                .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(12.dp))
                 .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = title,
+                text = "Nastavení zvuku",
                 color = Color.White,
-                fontSize = 19.sp,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
             )
 
-            if (includeOffOption) {
-                TvButton(
-                    text = "Vypnout titulky",
-                    isSelected = isOffSelected,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(firstFocusRequester),
-                    onClick = onSelectOff
-                )
-            }
+            Text(
+                text = "Zvuková stopa",
+                color = TvColors.TextSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
 
-            options.forEachIndexed { index, opt ->
-                val btnModifier = if (!includeOffOption && index == 0) {
-                    Modifier
-                        .fillMaxWidth()
-                        .focusRequester(firstFocusRequester)
-                } else {
-                    Modifier.fillMaxWidth()
+            if (tracks.isEmpty()) {
+                Text(
+                    text = "Výchozí zvuková stopa videa",
+                    color = Color(0xFFB3B3B3),
+                    fontSize = 13.sp
+                )
+            } else {
+                tracks.forEachIndexed { index, opt ->
+                    TvButton(
+                        text = opt.label,
+                        isSelected = opt.isSelected,
+                        modifier = if (index == 0) {
+                            Modifier.fillMaxWidth().focusRequester(firstFocusRequester)
+                        } else {
+                            Modifier.fillMaxWidth()
+                        },
+                        onClick = { onSelectTrack(opt) }
+                    )
                 }
-                TvButton(
-                    text = opt.label,
-                    isSelected = opt.isSelected && !isOffSelected,
-                    modifier = btnModifier,
-                    onClick = { onSelectTrack(opt) }
-                )
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             TvButton(
                 text = "Zavřít",
-                modifier = if (!includeOffOption && options.isEmpty()) {
-                    Modifier
-                        .fillMaxWidth()
-                        .focusRequester(firstFocusRequester)
+                isPrimary = true,
+                modifier = if (tracks.isEmpty()) {
+                    Modifier.fillMaxWidth().focusRequester(firstFocusRequester)
                 } else {
                     Modifier.fillMaxWidth()
                 },
+                onClick = onDismiss
+            )
+        }
+    }
+}
+
+@Composable
+private fun SubtitleSettingsOverlay(
+    tracks: List<EmbeddedTrackOption>,
+    isOffSelected: Boolean,
+    currentSizeMode: Int,
+    currentStyleMode: Int,
+    onSelectTrack: (EmbeddedTrackOption) -> Unit,
+    onSelectOff: () -> Unit,
+    onSelectSizeMode: (Int) -> Unit,
+    onSelectStyleMode: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val firstFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        delay(40L)
+        runCatching { firstFocusRequester.requestFocus() }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xCC000000)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .width(520.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(TvColors.SurfaceDark)
+                .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(12.dp))
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "Nastavení titulků",
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Text(
+                text = "Stopa titulků",
+                color = TvColors.TextSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            TvButton(
+                text = "Vypnout titulky",
+                isSelected = isOffSelected,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(firstFocusRequester),
+                onClick = onSelectOff
+            )
+
+            if (tracks.isEmpty()) {
+                Text(
+                    text = "Video neobsahuje žádné vestavěné titulky.",
+                    color = TvColors.TextMuted,
+                    fontSize = 12.sp
+                )
+            } else {
+                tracks.forEach { opt ->
+                    TvButton(
+                        text = opt.label,
+                        isSelected = opt.isSelected && !isOffSelected,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { onSelectTrack(opt) }
+                    )
+                }
+            }
+
+            Text(
+                text = "Velikost písma",
+                color = TvColors.TextSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf(0 to "Malé", 1 to "Střední", 2 to "Velké").forEach { (mode, label) ->
+                    TvButton(
+                        text = label,
+                        isSelected = currentSizeMode == mode,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onSelectSizeMode(mode) }
+                    )
+                }
+            }
+
+            Text(
+                text = "Vzhled titulků",
+                color = TvColors.TextSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf(0 to "Bílé (obrys)", 1 to "Žluté", 2 to "Tmavé pozadí").forEach { (mode, label) ->
+                    TvButton(
+                        text = label,
+                        isSelected = currentStyleMode == mode,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onSelectStyleMode(mode) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            TvButton(
+                text = "Zavřít",
+                isPrimary = true,
+                modifier = Modifier.fillMaxWidth(),
                 onClick = onDismiss
             )
         }
