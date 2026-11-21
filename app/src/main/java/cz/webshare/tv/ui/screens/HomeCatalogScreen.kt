@@ -48,7 +48,6 @@ import cz.webshare.tv.model.UserPreferences
 import cz.webshare.tv.model.WatchProgressItem
 import cz.webshare.tv.model.WebshareUserProfile
 import cz.webshare.tv.ui.NavTab
-import cz.webshare.tv.ui.components.ContinueWatchingOptionsDialog
 import cz.webshare.tv.ui.components.TechBadgePill
 import cz.webshare.tv.ui.components.TvButton
 import cz.webshare.tv.ui.components.TvColors
@@ -161,8 +160,6 @@ fun HomeCatalogScreen(
     onRemoveHistoryItem: (WatchProgressItem) -> Unit = {},
     onOpenHistoryDetail: (WatchProgressItem) -> Unit = {}
 ) {
-    var selectedHistoryForOptions by remember { mutableStateOf<WatchProgressItem?>(null) }
-
     val filteredSections = remember(sections, filterType) {
         if (filterType == null) {
             sections
@@ -298,7 +295,10 @@ fun HomeCatalogScreen(
                                     TvContinueWatchingCard(
                                         item = hItem,
                                         onClick = { onResumeHistory(hItem) },
-                                        onLongClick = { selectedHistoryForOptions = hItem }
+                                        onPlayFromBeginning = { onRestartHistoryFromBeginning(hItem) },
+                                        onMarkAsWatched = { onMarkHistoryWatched(hItem) },
+                                        onRemoveFromRow = { onRemoveHistoryItem(hItem) },
+                                        onOpenDetail = { onOpenHistoryDetail(hItem) }
                                     )
                                 }
                             }
@@ -331,34 +331,6 @@ fun HomeCatalogScreen(
                     }
                 }
             }
-        }
-
-        // Long-press options modal for Continue Watching card
-        selectedHistoryForOptions?.let { targetItem ->
-            ContinueWatchingOptionsDialog(
-                item = targetItem,
-                onResume = {
-                    selectedHistoryForOptions = null
-                    onResumeHistory(targetItem)
-                },
-                onPlayFromBeginning = {
-                    selectedHistoryForOptions = null
-                    onRestartHistoryFromBeginning(targetItem)
-                },
-                onMarkAsWatched = {
-                    selectedHistoryForOptions = null
-                    onMarkHistoryWatched(targetItem)
-                },
-                onRemoveFromRow = {
-                    selectedHistoryForOptions = null
-                    onRemoveHistoryItem(targetItem)
-                },
-                onOpenDetail = {
-                    selectedHistoryForOptions = null
-                    onOpenHistoryDetail(targetItem)
-                },
-                onDismiss = { selectedHistoryForOptions = null }
-            )
         }
     }
 }
@@ -449,8 +421,6 @@ fun MyListScreen(
     onRemoveHistoryItem: (WatchProgressItem) -> Unit = {},
     onOpenHistoryDetail: (WatchProgressItem) -> Unit = {}
 ) {
-    var selectedHistoryForOptions by remember { mutableStateOf<WatchProgressItem?>(null) }
-
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier
@@ -487,7 +457,10 @@ fun MyListScreen(
                             TvContinueWatchingCard(
                                 item = hItem,
                                 onClick = { onResumeHistory(hItem) },
-                                onLongClick = { selectedHistoryForOptions = hItem }
+                                onPlayFromBeginning = { onRestartHistoryFromBeginning(hItem) },
+                                onMarkAsWatched = { onMarkHistoryWatched(hItem) },
+                                onRemoveFromRow = { onRemoveHistoryItem(hItem) },
+                                onOpenDetail = { onOpenHistoryDetail(hItem) }
                             )
                         }
                     }
@@ -536,33 +509,6 @@ fun MyListScreen(
                     }
                 }
             }
-        }
-
-        selectedHistoryForOptions?.let { targetItem ->
-            ContinueWatchingOptionsDialog(
-                item = targetItem,
-                onResume = {
-                    selectedHistoryForOptions = null
-                    onResumeHistory(targetItem)
-                },
-                onPlayFromBeginning = {
-                    selectedHistoryForOptions = null
-                    onRestartHistoryFromBeginning(targetItem)
-                },
-                onMarkAsWatched = {
-                    selectedHistoryForOptions = null
-                    onMarkHistoryWatched(targetItem)
-                },
-                onRemoveFromRow = {
-                    selectedHistoryForOptions = null
-                    onRemoveHistoryItem(targetItem)
-                },
-                onOpenDetail = {
-                    selectedHistoryForOptions = null
-                    onOpenHistoryDetail(targetItem)
-                },
-                onDismiss = { selectedHistoryForOptions = null }
-            )
         }
     }
 }

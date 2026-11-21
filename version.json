@@ -1,6 +1,6 @@
 {
-  "versionCode": 3,
-  "versionName": "1.2.0",
+  "versionCode": 4,
+  "versionName": "1.2.1",
   "apkUrl": "https://raw.githubusercontent.com/pagerek/mojetelka/main/WebshareTV.apk",
-  "changelog": "Přidána automatická aktualizace přes Git repozitář (pagerek/mojetelka) v Nastavení"
+  "changelog": "Kompaktní Popover nabídka na pásu Pokračovat ve sledování + oprava podržení tlačítka OK"
 }

@@ -48,8 +48,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import cz.webshare.tv.model.CatalogItem
@@ -409,35 +412,46 @@ fun TvPosterCard(
 
 /**
  * Continue Watching ("Rozkoukané") landscape card with Netflix red progress bar
- * and support for D-Pad long-press (or MENU key) action menu.
+ * and a compact anchored Popover menu triggered by holding OK / Enter (or pressing MENU).
+ *
+ * Importantly, uses `focusable()` + explicit key state tracking instead of `combinedClickable`
+ * so releasing the OK button after a long-press NEVER accidentally triggers the first popover item!
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TvContinueWatchingCard(
     item: WatchProgressItem,
     onClick: () -> Unit,
-    onLongClick: (() -> Unit)? = null,
+    onPlayFromBeginning: (() -> Unit)? = null,
+    onMarkAsWatched: (() -> Unit)? = null,
+    onRemoveFromRow: (() -> Unit)? = null,
+    onOpenDetail: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var isFocused by remember { mutableStateOf(false) }
     var isHoldingSelect by remember { mutableStateOf(false) }
     var longPressFired by remember { mutableStateOf(false) }
+    var showPopoverMenu by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
 
-    // Timer for D-Pad OK/Enter long press (500ms hold triggers options modal)
+    val hasPopoverActions = onPlayFromBeginning != null ||
+        onMarkAsWatched != null ||
+        onRemoveFromRow != null ||
+        onOpenDetail != null
+
+    // Timer for D-Pad OK/Enter long press (450ms hold opens compact popover right on the card)
     LaunchedEffect(isHoldingSelect) {
-        if (isHoldingSelect && onLongClick != null) {
-            delay(480L)
+        if (isHoldingSelect && hasPopoverActions) {
+            delay(450L)
             if (isHoldingSelect && !longPressFired) {
                 longPressFired = true
-                onLongClick()
+                showPopoverMenu = true
             }
         }
     }
 
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.06f else 1.0f,
+        targetValue = if (isFocused || showPopoverMenu) 1.06f else 1.0f,
         animationSpec = tween(120),
         label = "cw_scale"
     )
@@ -453,165 +467,204 @@ fun TvContinueWatchingCard(
         }
     }
 
-    Box(
-        modifier = modifier
-            .width(210.dp)
-            .height(118.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clip(RoundedCornerShape(10.dp))
-            .background(TvColors.SurfaceDark)
-            .border(
-                width = if (isFocused) 3.dp else 1.dp,
-                color = if (isFocused) Color.White else Color(0xFF222636),
-                shape = RoundedCornerShape(10.dp)
-            )
-            .onFocusChanged {
-                isFocused = it.isFocused
-                if (!it.isFocused) {
-                    isHoldingSelect = false
-                    longPressFired = false
-                }
-            }
-            .onPreviewKeyEvent { event ->
-                if (onLongClick == null) return@onPreviewKeyEvent false
-                val keyCode = event.nativeKeyEvent.keyCode
-                val action = event.nativeKeyEvent.action
-
-                // Dedicated Menu / Info / Guide remote buttons open options immediately
-                if (action == KeyEvent.ACTION_DOWN &&
-                    (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_INFO || keyCode == KeyEvent.KEYCODE_BOOKMARK)
-                ) {
-                    onLongClick()
-                    return@onPreviewKeyEvent true
-                }
-
-                // D-Pad Center / Enter long-press detection
-                if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
-                    keyCode == KeyEvent.KEYCODE_ENTER ||
-                    keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
-                ) {
-                    when (action) {
-                        KeyEvent.ACTION_DOWN -> {
-                            if (event.nativeKeyEvent.repeatCount == 0) {
-                                isHoldingSelect = true
-                                longPressFired = false
-                            } else if (event.nativeKeyEvent.repeatCount >= 1 && !longPressFired) {
-                                longPressFired = true
-                                isHoldingSelect = false
-                                onLongClick()
-                            }
-                            true
-                        }
-                        KeyEvent.ACTION_UP -> {
-                            val wasLongPress = longPressFired
-                            isHoldingSelect = false
-                            longPressFired = false
-                            if (!wasLongPress) {
-                                onClick()
-                            }
-                            true
-                        }
-                        else -> false
-                    }
-                } else {
-                    false
-                }
-            }
-            .combinedClickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick,
-                onLongClick = onLongClick
-            )
-    ) {
-        if (imageRequest != null) {
-            AsyncImage(
-                model = imageRequest,
-                contentDescription = item.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-
+    Box(modifier = modifier) {
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color(0x22000000), Color(0xEE06070A))
-                    )
+                .width(210.dp)
+                .height(118.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
+                .clip(RoundedCornerShape(10.dp))
+                .background(TvColors.SurfaceDark)
+                .border(
+                    width = if (isFocused || showPopoverMenu) 3.dp else 1.dp,
+                    color = when {
+                        showPopoverMenu -> TvColors.NetflixRed
+                        isFocused -> Color.White
+                        else -> Color(0xFF222636)
+                    },
+                    shape = RoundedCornerShape(10.dp)
                 )
-        )
+                .onFocusChanged {
+                    isFocused = it.isFocused
+                    if (!it.isFocused) {
+                        isHoldingSelect = false
+                    }
+                }
+                .onPreviewKeyEvent { event ->
+                    val keyCode = event.nativeKeyEvent.keyCode
+                    val action = event.nativeKeyEvent.action
 
-        // Subtle top-right hint when focused that holding OK opens options
-        if (isFocused && onLongClick != null) {
+                    // Dedicated Menu / Info / Guide remote buttons open popover immediately
+                    if (hasPopoverActions && action == KeyEvent.ACTION_DOWN &&
+                        (keyCode == KeyEvent.KEYCODE_MENU ||
+                            keyCode == KeyEvent.KEYCODE_INFO ||
+                            keyCode == KeyEvent.KEYCODE_BOOKMARK)
+                    ) {
+                        showPopoverMenu = true
+                        return@onPreviewKeyEvent true
+                    }
+
+                    // D-Pad Center / Enter short-press vs long-press handling
+                    if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+                        keyCode == KeyEvent.KEYCODE_ENTER ||
+                        keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
+                    ) {
+                        when (action) {
+                            KeyEvent.ACTION_DOWN -> {
+                                if (event.nativeKeyEvent.repeatCount == 0) {
+                                    isHoldingSelect = true
+                                    longPressFired = false
+                                } else if (hasPopoverActions && event.nativeKeyEvent.repeatCount >= 1 && !longPressFired) {
+                                    longPressFired = true
+                                    isHoldingSelect = false
+                                    showPopoverMenu = true
+                                }
+                                true
+                            }
+                            KeyEvent.ACTION_UP -> {
+                                val wasLongPress = longPressFired
+                                isHoldingSelect = false
+                                longPressFired = false
+                                // Only fire short click if long press did NOT open the popover!
+                                if (!wasLongPress && !showPopoverMenu) {
+                                    onClick()
+                                }
+                                true
+                            }
+                            else -> false
+                        }
+                    } else {
+                        false
+                    }
+                }
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = {
+                        if (!showPopoverMenu && !longPressFired) {
+                            onClick()
+                        }
+                    }
+                )
+        ) {
+            if (imageRequest != null) {
+                AsyncImage(
+                    model = imageRequest,
+                    contentDescription = item.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(6.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(Color(0xCC06070A))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color(0x22000000), Color(0xEE06070A))
+                        )
+                    )
+            )
+
+            // Subtle top-right hint when focused that holding OK opens popover
+            if ((isFocused || showPopoverMenu) && hasPopoverActions) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(if (showPopoverMenu) TvColors.NetflixRed else Color(0xCC06070A))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = if (showPopoverMenu) "Možnosti ▾" else "Podrž OK: Možnosti",
+                        color = Color.White,
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(10.dp)
             ) {
                 Text(
-                    text = "Podrž OK: Možnosti",
-                    color = Color(0xFFE5E7EB),
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    text = "▶ Pokračovat (${item.formattedPosition})",
+                    color = TvColors.NetflixRed,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
                     maxLines = 1
                 )
+                Text(
+                    text = item.title,
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(5.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.5.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Color(0x55FFFFFF))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(item.progressFraction)
+                            .height(3.5.dp)
+                            .background(TvColors.NetflixRed)
+                    )
+                }
             }
         }
 
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .padding(10.dp)
-        ) {
-            Text(
-                text = "▶ Pokračovat (${item.formattedPosition})",
-                color = TvColors.NetflixRed,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1
+        // Compact Anchored Popover Menu right under the card (no fullscreen overlay!)
+        if (showPopoverMenu) {
+            ContinueWatchingPopoverMenu(
+                item = item,
+                onResume = {
+                    showPopoverMenu = false
+                    onClick()
+                },
+                onPlayFromBeginning = {
+                    showPopoverMenu = false
+                    onPlayFromBeginning?.invoke()
+                },
+                onMarkAsWatched = {
+                    showPopoverMenu = false
+                    onMarkAsWatched?.invoke()
+                },
+                onRemoveFromRow = {
+                    showPopoverMenu = false
+                    onRemoveFromRow?.invoke()
+                },
+                onOpenDetail = {
+                    showPopoverMenu = false
+                    onOpenDetail?.invoke()
+                },
+                onDismiss = { showPopoverMenu = false }
             )
-            Text(
-                text = item.title,
-                color = Color.White,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(5.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(3.5.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(Color(0x55FFFFFF))
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(item.progressFraction)
-                        .height(3.5.dp)
-                        .background(TvColors.NetflixRed)
-                )
-            }
         }
     }
 }
 
 /**
- * Modal dialog shown on long-press of a Continue Watching card.
- * Allows resuming, restarting from beginning, marking as watched, removing from row, or opening media detail.
+ * Compact anchored popover menu attached directly below the Continue Watching card.
+ * Ignores the trailing `ACTION_UP` from the initial long-press hold so releasing the OK button
+ * never auto-triggers the first option or closes the menu.
  */
 @Composable
-fun ContinueWatchingOptionsDialog(
+private fun ContinueWatchingPopoverMenu(
     item: WatchProgressItem,
     onResume: () -> Unit,
     onPlayFromBeginning: () -> Unit,
@@ -621,118 +674,181 @@ fun ContinueWatchingOptionsDialog(
     onDismiss: () -> Unit
 ) {
     val firstOptionFocusRequester = remember { FocusRequester() }
+    // Arm selection only after we receive a fresh ACTION_DOWN inside the popover
+    // (or after the user has released the initial long-press key).
+    var armedForClick by remember { mutableStateOf(false) }
 
-    LaunchedEffect(item) {
-        delay(40L)
+    LaunchedEffect(Unit) {
+        delay(30L)
         runCatching { firstOptionFocusRequester.requestFocus() }
+        // Safety fallback if the long-press key was already released before focus arrived
+        delay(700L)
+        armedForClick = true
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xD9050609))
-            .onPreviewKeyEvent { event ->
-                if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
-                    (event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_BACK ||
-                        event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_ESCAPE)
-                ) {
-                    onDismiss()
-                    true
-                } else {
-                    false
-                }
-            },
-        contentAlignment = Alignment.Center
+    Popup(
+        alignment = Alignment.TopStart,
+        offset = IntOffset(0, 130),
+        properties = PopupProperties(
+            focusable = true,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true
+        ),
+        onDismissRequest = onDismiss
     ) {
         Column(
             modifier = Modifier
-                .width(480.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(TvColors.SurfaceDark)
-                .border(1.5.dp, Color(0xFF2F354D), RoundedCornerShape(18.dp))
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                TechBadgePill(
-                    text = if (item.mediaType == MediaType.SERIES) "ROZKOUKANÝ SERIÁL" else "ROZKOUKANÝ FILM",
-                    backgroundColor = TvColors.NetflixRed
-                )
-                TechBadgePill(
-                    text = "Pozice: ${item.formattedPosition}",
-                    backgroundColor = Color(0xFF1F2437),
-                    textColor = TvColors.AccentGold
-                )
-            }
+                .width(236.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xF7121521))
+                .border(1.5.dp, Color(0xFF38405C), RoundedCornerShape(12.dp))
+                .onPreviewKeyEvent { event ->
+                    val keyCode = event.nativeKeyEvent.keyCode
+                    val action = event.nativeKeyEvent.action
 
+                    if (action == KeyEvent.ACTION_DOWN &&
+                        (keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE)
+                    ) {
+                        onDismiss()
+                        return@onPreviewKeyEvent true
+                    }
+
+                    // Swallow the lingering ACTION_UP or repeated ACTION_DOWN from the initial long-press
+                    if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+                        keyCode == KeyEvent.KEYCODE_ENTER ||
+                        keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
+                    ) {
+                        if (action == KeyEvent.ACTION_DOWN) {
+                            if (event.nativeKeyEvent.repeatCount == 0) {
+                                armedForClick = true
+                            } else if (!armedForClick) {
+                                // Still holding from the long press -> swallow repeat
+                                return@onPreviewKeyEvent true
+                            }
+                        } else if (action == KeyEvent.ACTION_UP && !armedForClick) {
+                            // User just released the long-press OK button!
+                            // Swallow this ACTION_UP and arm the popover for the next normal press.
+                            armedForClick = true
+                            return@onPreviewKeyEvent true
+                        }
+                    }
+                    false
+                }
+                .padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
             Text(
                 text = item.title,
-                color = Color.White,
-                fontSize = 21.sp,
-                fontWeight = FontWeight.ExtraBold,
+                color = TvColors.TextSecondary,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
             )
 
-            if (!item.subtitle.isNullOrEmpty()) {
-                Text(
-                    text = item.subtitle,
-                    color = TvColors.TextSecondary,
-                    fontSize = 13.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            TvButton(
-                text = "▶ Pokračovat v přehrávání (od ${item.formattedPosition})",
+            PopoverMenuItem(
+                text = "▶ Pokračovat (${item.formattedPosition})",
                 isPrimary = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(firstOptionFocusRequester),
+                isArmed = { armedForClick },
+                modifier = Modifier.focusRequester(firstOptionFocusRequester),
                 onClick = onResume
             )
 
-            TvButton(
-                text = "⏮ Přehrát znovu od začátku",
-                subtitle = "Spustit video od času 00:00",
-                modifier = Modifier.fillMaxWidth(),
+            PopoverMenuItem(
+                text = "⏮ Přehrát od začátku",
+                isArmed = { armedForClick },
                 onClick = onPlayFromBeginning
             )
 
-            TvButton(
+            PopoverMenuItem(
                 text = "✓ Označit jako zhlédnuté",
-                subtitle = "Dokončit sledování a skrýt z pásu Pokračovat ve sledování",
-                modifier = Modifier.fillMaxWidth(),
+                isArmed = { armedForClick },
                 onClick = onMarkAsWatched
             )
 
-            TvButton(
-                text = "✕ Odebrat z Pokračovat ve sledování",
-                subtitle = "Smazat uloženou pozici přehrávání",
-                modifier = Modifier.fillMaxWidth(),
+            PopoverMenuItem(
+                text = "✕ Odebrat z pásu",
+                isDestructive = true,
+                isArmed = { armedForClick },
                 onClick = onRemoveFromRow
             )
 
-            TvButton(
-                text = "ℹ Detail titulu a výběr kvality / epizod",
-                modifier = Modifier.fillMaxWidth(),
+            PopoverMenuItem(
+                text = "ℹ Detail a epizody",
+                isArmed = { armedForClick },
                 onClick = onOpenDetail
             )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            TvButton(
-                text = "Zavřít",
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onDismiss
-            )
         }
+    }
+}
+
+@Composable
+private fun PopoverMenuItem(
+    text: String,
+    isArmed: () -> Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    isPrimary: Boolean = false,
+    isDestructive: Boolean = false
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+
+    val bgColor = when {
+        isFocused && isPrimary -> TvColors.NetflixRed
+        isFocused && isDestructive -> Color(0xFFB91C1C)
+        isFocused -> Color.White
+        else -> Color.Transparent
+    }
+
+    val textColor = when {
+        isFocused && (isPrimary || isDestructive) -> Color.White
+        isFocused -> Color(0xFF06070A)
+        isDestructive -> Color(0xFFFCA5A5)
+        else -> Color(0xFFE5E7EB)
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(7.dp))
+            .background(bgColor)
+            .onFocusChanged { isFocused = it.isFocused }
+            .onPreviewKeyEvent { event ->
+                val keyCode = event.nativeKeyEvent.keyCode
+                if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+                    keyCode == KeyEvent.KEYCODE_ENTER ||
+                    keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
+                ) {
+                    // Block any key events (including the trailing ACTION_UP from the long-press)
+                    // until the popover has been armed by a fresh key release / press cycle!
+                    if (!isArmed()) {
+                        return@onPreviewKeyEvent true
+                    }
+                }
+                false
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = {
+                    if (isArmed()) {
+                        onClick()
+                    }
+                }
+            )
+            .padding(horizontal = 10.dp, vertical = 7.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Text(
+            text = text,
+            color = textColor,
+            fontSize = 12.sp,
+            fontWeight = if (isFocused) FontWeight.ExtraBold else FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
