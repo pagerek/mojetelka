@@ -28,7 +28,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -88,34 +91,28 @@ fun TopNavigationBar(
         Row(
             modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Iconic Netflix-style Red Ribbon Logo
+            // Minimalist Brand Icon: Black fill, Red border, Red W
             Box(
                 modifier = Modifier
-                    .size(28.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(TvColors.NetflixRed),
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(0xFF0A0A0A))
+                    .border(1.8.dp, TvColors.NetflixRed, RoundedCornerShape(6.dp))
+                    .padding(end = 0.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "W",
-                    color = Color.White,
-                    fontSize = 17.sp,
+                    color = TvColors.NetflixRed,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Black,
                     maxLines = 1
                 )
             }
-            Text(
-                text = "WEBSHARE",
-                color = TvColors.NetflixRed,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 1.8.sp,
-                maxLines = 1,
-                softWrap = false,
-                modifier = Modifier.padding(end = 14.dp)
-            )
+
+            Spacer(modifier = Modifier.width(6.dp))
 
             NavTab.entries.forEach { tab ->
                 val tabModifier = if (tab == NavTab.HOME) {
@@ -132,23 +129,23 @@ fun TopNavigationBar(
             }
         }
 
-        // Minimalist status indicators on the right
+        // Minimalist status indicators on the right (no distracting heavy borders)
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             TechBadgePill(
                 text = "${preferences.preferredLanguage.badge} • ${preferences.preferredQuality.badge}",
-                backgroundColor = Color(0xFF1A1A1A),
-                textColor = Color(0xFFE5E5E5),
-                borderColor = Color(0x33FFFFFF)
+                backgroundColor = Color(0xFF161616),
+                textColor = Color(0xFFB3B3B3),
+                borderColor = Color(0x18FFFFFF)
             )
             if (userProfile != null) {
                 TechBadgePill(
                     text = if (userProfile.isVip) "VIP • ${userProfile.vipDaysLeft}d" else userProfile.username,
-                    backgroundColor = if (userProfile.isVip) Color(0x2646D369) else Color(0x26F5C518),
+                    backgroundColor = if (userProfile.isVip) Color(0x1F46D369) else Color(0x1FF5C518),
                     textColor = if (userProfile.isVip) TvColors.VipGreen else TvColors.AccentGold,
-                    borderColor = if (userProfile.isVip) Color(0x5546D369) else Color(0x55F5C518)
+                    borderColor = if (userProfile.isVip) Color(0x3346D369) else Color(0x33F5C518)
                 )
             }
         }
@@ -191,30 +188,58 @@ fun HomeCatalogScreen(
         displayedHero != null && myList.any { it.id == displayedHero.id }
     }
 
+    var usePosterFallback by remember(displayedHero?.id) { mutableStateOf(false) }
+    var backdropFailed by remember(displayedHero?.id) { mutableStateOf(false) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(TvColors.Background)
     ) {
-        // Full-Bleed Netflix Cinematic Billboard Backdrop (anchored top-right, 78% width, 370dp height)
+        // Full-Bleed Netflix Cinematic Billboard Backdrop with automatic fallback to poster & ambient gradient
         if (displayedHero != null) {
-            val bgUrl = displayedHero.backdropUrl ?: displayedHero.posterUrl
-            if (!bgUrl.isNullOrEmpty()) {
+            val bgUrl = if (usePosterFallback) displayedHero.posterUrl else (displayedHero.backdropUrl ?: displayedHero.posterUrl)
+            if (!bgUrl.isNullOrEmpty() && !backdropFailed) {
                 AsyncImage(
                     model = bgUrl,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
+                    onError = {
+                        if (!usePosterFallback && !displayedHero.posterUrl.isNullOrEmpty() && displayedHero.posterUrl != displayedHero.backdropUrl) {
+                            usePosterFallback = true
+                        } else {
+                            backdropFailed = true
+                        }
+                    },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .fillMaxWidth(0.78f)
-                        .height(370.dp)
+                        .fillMaxWidth(0.75f)
+                        .height(350.dp)
+                )
+            } else {
+                // Subtle cinematic red/charcoal ambient glow when no image is available
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .fillMaxWidth(0.75f)
+                        .height(350.dp)
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    Color(0x33E50914),
+                                    Color(0x1A1E1E1E),
+                                    TvColors.Background
+                                ),
+                                radius = 900f
+                            )
+                        )
                 )
             }
             // Deep Left-to-Right Cinematic Vignette so text on the left is 100% legible
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(375.dp)
+                    .height(355.dp)
                     .background(
                         Brush.horizontalGradient(
                             colors = listOf(
@@ -231,7 +256,7 @@ fun HomeCatalogScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(375.dp)
+                    .height(355.dp)
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
@@ -287,13 +312,13 @@ fun HomeCatalogScreen(
 
                 if (relevantHistory.isNotEmpty()) {
                     item(key = "continue_watching") {
-                        Column(modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)) {
+                        Column(modifier = Modifier.padding(top = 2.dp, bottom = 6.dp)) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 32.dp, vertical = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                    .padding(horizontal = 32.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 Text(
                                     text = "Pokračovat ve sledování",
@@ -302,13 +327,13 @@ fun HomeCatalogScreen(
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "Podrž OK pro možnosti",
+                                    text = "•  Podrž OK pro možnosti",
                                     color = TvColors.TextMuted,
                                     fontSize = 11.sp
                                 )
                             }
                             LazyRow(
-                                contentPadding = PaddingValues(horizontal = 32.dp, vertical = 6.dp),
+                                contentPadding = PaddingValues(horizontal = 32.dp, vertical = 4.dp),
                                 horizontalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
                                 items(
@@ -330,8 +355,8 @@ fun HomeCatalogScreen(
                 }
 
                 // Horizontal Movie & Series Poster Rows
-                itemsIndexed(filteredSections, key = { _, sec -> sec.id }) { secIdx, section ->
-                    Column(modifier = Modifier.padding(top = 8.dp, bottom = 6.dp)) {
+                itemsIndexed(filteredSections, key = { _, sec -> sec.id }) { _, section ->
+                    Column(modifier = Modifier.padding(top = 6.dp, bottom = 4.dp)) {
                         Text(
                             text = section.title,
                             color = Color(0xFFE5E5E5),
@@ -343,8 +368,9 @@ fun HomeCatalogScreen(
                             contentPadding = PaddingValues(horizontal = 32.dp, vertical = 6.dp),
                             horizontalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
+                            val isRankedChart = section.id == "trending_movies" || section.id == "top_movies"
                             itemsIndexed(section.items, key = { _, item -> item.id }) { itemIdx, item ->
-                                val topRank = if (secIdx == 0 && itemIdx < 10) itemIdx + 1 else null
+                                val topRank = if (isRankedChart && itemIdx < 10) itemIdx + 1 else null
                                 TvPosterCard(
                                     item = item,
                                     rankNumber = topRank,
@@ -379,7 +405,7 @@ private fun HeroSpotlightSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 32.dp, end = 32.dp, top = 14.dp, bottom = 16.dp)
+            .padding(start = 32.dp, end = 32.dp, top = 8.dp, bottom = 10.dp)
     ) {
         // 1. Netflix "W" Original-style Header Brand Tag
         Row(

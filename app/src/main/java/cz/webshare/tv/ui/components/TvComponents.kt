@@ -101,11 +101,10 @@ fun TvButton(
 
     val bgColor by animateColorAsState(
         targetValue = when {
-            isFocused && isPrimary -> Color.White
             isFocused -> Color.White
             isPrimary -> TvColors.NetflixRed
-            isSelected -> Color(0xFF2B2B2B)
-            else -> Color(0xCC262626)
+            isSelected -> Color(0x55FFFFFF)
+            else -> Color(0x2EFFFFFF)
         },
         animationSpec = tween(110),
         label = "btn_bg"
@@ -121,11 +120,10 @@ fun TvButton(
     val borderColor = when {
         isFocused -> Color.White
         isSelected -> TvColors.NetflixRed
-        isPrimary -> Color.Transparent
-        else -> Color(0x33FFFFFF)
+        else -> Color.Transparent
     }
 
-    val borderWidth = if (isFocused) 2.dp else if (isSelected) 1.5.dp else 1.dp
+    val borderWidth = if (isFocused) 2.dp else if (isSelected) 1.5.dp else 0.dp
 
     Box(
         modifier = modifier
@@ -270,6 +268,7 @@ fun TvPosterCard(
 ) {
     val context = LocalContext.current
     var isFocused by remember { mutableStateOf(false) }
+    var imageFailed by remember(item.posterUrl) { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
 
     val scale by animateFloatAsState(
@@ -321,16 +320,17 @@ fun TvPosterCard(
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        listOf(Color(0xFF1F1F1F), Color(0xFF121212))
+                        listOf(Color(0xFF24161A), Color(0xFF141414))
                     )
                 )
         )
 
-        if (imageRequest != null) {
+        if (imageRequest != null && !imageFailed) {
             AsyncImage(
                 model = imageRequest,
                 contentDescription = item.title,
                 contentScale = ContentScale.Crop,
+                onError = { imageFailed = true },
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -372,8 +372,8 @@ fun TvPosterCard(
             }
         }
 
-        // Show title overlay if poster URL is missing OR when card is focused
-        if (imageRequest == null || isFocused) {
+        // Show title overlay if poster URL is missing/failed OR when card is focused
+        if (imageRequest == null || imageFailed || isFocused) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -448,6 +448,8 @@ fun TvContinueWatchingCard(
     var isHoldingSelect by remember { mutableStateOf(false) }
     var longPressFired by remember { mutableStateOf(false) }
     var showPopoverMenu by remember { mutableStateOf(false) }
+    var usePosterFallback by remember(item.backdropUrl) { mutableStateOf(false) }
+    var imageFailed by remember(item.backdropUrl, item.posterUrl) { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
 
     val hasPopoverActions = onPlayFromBeginning != null ||
@@ -472,12 +474,12 @@ fun TvContinueWatchingCard(
         label = "cw_scale"
     )
 
-    val imageUrl = item.backdropUrl ?: item.posterUrl
+    val imageUrl = if (usePosterFallback) item.posterUrl else (item.backdropUrl ?: item.posterUrl)
     val imageRequest = remember(imageUrl) {
         imageUrl?.takeIf { it.isNotEmpty() }?.let { url ->
             ImageRequest.Builder(context)
                 .data(url)
-                .size(420, 236)
+                .size(396, 208)
                 .crossfade(false)
                 .build()
         }
@@ -486,8 +488,8 @@ fun TvContinueWatchingCard(
     Box(modifier = modifier) {
         Box(
             modifier = Modifier
-                .width(210.dp)
-                .height(118.dp)
+                .width(198.dp)
+                .height(104.dp)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
@@ -566,11 +568,18 @@ fun TvContinueWatchingCard(
                     }
                 )
         ) {
-            if (imageRequest != null) {
+            if (imageRequest != null && !imageFailed) {
                 AsyncImage(
                     model = imageRequest,
                     contentDescription = item.title,
                     contentScale = ContentScale.Crop,
+                    onError = {
+                        if (!usePosterFallback && !item.posterUrl.isNullOrEmpty() && item.posterUrl != item.backdropUrl) {
+                            usePosterFallback = true
+                        } else {
+                            imageFailed = true
+                        }
+                    },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -580,7 +589,11 @@ fun TvContinueWatchingCard(
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            listOf(Color(0x22000000), Color(0xEE06070A))
+                            colors = listOf(
+                                Color(0x11000000),
+                                Color(0x770A0A0A),
+                                Color(0xF20A0A0A)
+                            )
                         )
                     )
             )
@@ -592,7 +605,7 @@ fun TvContinueWatchingCard(
                         .align(Alignment.TopEnd)
                         .padding(6.dp)
                         .clip(RoundedCornerShape(4.dp))
-                        .background(if (showPopoverMenu) TvColors.NetflixRed else Color(0xCC06070A))
+                        .background(if (showPopoverMenu) TvColors.NetflixRed else Color(0xCC0A0A0A))
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
                     Text(
@@ -609,15 +622,26 @@ fun TvContinueWatchingCard(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
-                    .padding(10.dp)
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
             ) {
-                Text(
-                    text = "▶ Pokračovat (${item.formattedPosition})",
-                    color = TvColors.NetflixRed,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "▶",
+                        color = TvColors.NetflixRed,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        text = "Pokračovat • ${item.formattedPosition}",
+                        color = Color(0xFFE5E5E5),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                }
                 Text(
                     text = item.title,
                     color = Color.White,

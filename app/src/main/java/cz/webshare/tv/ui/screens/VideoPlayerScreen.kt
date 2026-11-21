@@ -23,8 +23,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.FastForward
-import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
@@ -70,6 +68,7 @@ import cz.webshare.tv.ui.ActivePlaybackSession
 import cz.webshare.tv.ui.components.TechBadgePill
 import cz.webshare.tv.ui.components.TvButton
 import cz.webshare.tv.ui.components.TvColors
+import cz.webshare.tv.ui.components.TvIconButton
 import kotlinx.coroutines.delay
 
 data class EmbeddedTrackOption(
@@ -565,160 +564,123 @@ fun VideoPlayerScreen(
                     }
                 }
 
-                // Bottom Bar: Fallback/Stream Notice, Focusable Timeline & Track Controls
+                // Bottom Bar: Track/Quality Controls above & Play/Pause + Focusable Timeline at the very bottom
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
-                        .padding(horizontal = 36.dp, vertical = 26.dp)
+                        .padding(horizontal = 36.dp, vertical = 20.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (!session.bannerMessage.isNullOrEmpty()) {
-                            TechBadgePill(
-                                text = session.bannerMessage,
-                                backgroundColor = Color(0xCC1F2437),
-                                textColor = TvColors.AccentGold
-                            )
-                        } else {
-                            Spacer(modifier = Modifier.width(1.dp))
+                    val hasSecondaryControls = audioTracks.size > 1 ||
+                        subtitleTracks.isNotEmpty() ||
+                        (session.resolutionResult != null && session.resolutionResult.groups.isNotEmpty()) ||
+                        session.nextEpisode != null
+
+                    if (hasSecondaryControls) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                if (audioTracks.size > 1) {
+                                    TvButton(
+                                        text = "Zvuková stopa (${audioTracks.size})",
+                                        onClick = { showAudioTrackModal = true }
+                                    )
+                                }
+
+                                if (subtitleTracks.isNotEmpty()) {
+                                    TvButton(
+                                        text = "Titulky (${subtitleTracks.size})",
+                                        onClick = { showSubtitleTrackModal = true }
+                                    )
+                                }
+
+                                if (session.resolutionResult != null && session.resolutionResult.groups.isNotEmpty()) {
+                                    TvButton(
+                                        text = "Kvalita / Zdroj (${session.activeStream.quality.badge} • ${session.activeStream.language.badge})",
+                                        icon = Icons.Default.Settings,
+                                        onClick = { showQualityModal = true }
+                                    )
+                                }
+
+                                if (session.nextEpisode != null) {
+                                    TvButton(
+                                        text = "Další díl (${session.nextEpisode.code})",
+                                        icon = Icons.Default.SkipNext,
+                                        isPrimary = true,
+                                        onClick = onNextEpisode
+                                    )
+                                }
+                            }
                         }
 
-                        TechBadgePill(
-                            text = if (isTimelineFocused) {
-                                "◀ ▶ Šipky posouvají čas (-15 s / +15 s) • OK Pozastavit • ▼ Další volby"
-                            } else {
-                                "▲ Časová osa • ◀ ▶ Pohyb mezi tlačítky"
-                            },
-                            backgroundColor = if (isTimelineFocused) Color(0xCC1E263B) else Color(0x88151822),
-                            textColor = if (isTimelineFocused) Color.White else TvColors.TextSecondary
-                        )
+                        Spacer(modifier = Modifier.height(10.dp))
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Default-Focused Interactive Seek Timeline Bar
+                    // Bottom-most row: Icon-only Play/Pause button + Default-Focused Interactive Seek Timeline Bar
                     val progressFraction = if (durationMs > 0L) {
                         (currentPosMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
                     } else 0f
 
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (isTimelineFocused) Color(0x44FFFFFF) else Color.Transparent)
-                            .border(
-                                width = if (isTimelineFocused) 2.dp else 0.dp,
-                                color = if (isTimelineFocused) Color.White else Color.Transparent,
-                                shape = RoundedCornerShape(10.dp)
-                            )
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
-                            .focusRequester(timelineFocusRequester)
-                            .onFocusChanged { isTimelineFocused = it.isFocused }
-                            .focusable(),
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(
-                            text = formatDurationMs(currentPosMs),
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold
+                        TvIconButton(
+                            icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) "Pozastavit" else "Přehrát",
+                            modifier = Modifier.focusRequester(playPauseFocusRequester),
+                            onClick = { togglePlayPause() }
                         )
 
-                        Box(
+                        Row(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(if (isTimelineFocused) 12.dp else 8.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0x55FFFFFF))
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isTimelineFocused) Color(0x44FFFFFF) else Color.Transparent)
+                                .border(
+                                    width = if (isTimelineFocused) 2.dp else 0.dp,
+                                    color = if (isTimelineFocused) Color.White else Color.Transparent,
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                .focusRequester(timelineFocusRequester)
+                                .onFocusChanged { isTimelineFocused = it.isFocused }
+                                .focusable(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
+                            Text(
+                                text = formatDurationMs(currentPosMs),
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth(progressFraction)
+                                    .weight(1f)
                                     .height(if (isTimelineFocused) 12.dp else 8.dp)
-                                    .background(TvColors.NetflixRed)
-                            )
-                        }
-
-                        Text(
-                            text = formatDurationMs(durationMs),
-                            color = if (isTimelineFocused) Color.White else TvColors.TextSecondary,
-                            fontSize = 14.sp,
-                            fontWeight = if (isTimelineFocused) FontWeight.Bold else FontWeight.Normal
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // D-Pad Control Buttons Row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            TvButton(
-                                text = "-15 s",
-                                icon = Icons.Default.FastRewind,
-                                onClick = { seekRelative(-15_000L) }
-                            )
-
-                            TvButton(
-                                text = if (isPlaying) "Pozastavit" else "Přehrát",
-                                icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                isPrimary = true,
-                                modifier = Modifier.focusRequester(playPauseFocusRequester),
-                                onClick = { togglePlayPause() }
-                            )
-
-                            TvButton(
-                                text = "+15 s",
-                                icon = Icons.Default.FastForward,
-                                onClick = { seekRelative(15_000L) }
-                            )
-
-                            TvButton(
-                                text = "+60 s",
-                                icon = Icons.Default.FastForward,
-                                onClick = { seekRelative(60_000L) }
-                            )
-                        }
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            if (audioTracks.size > 1) {
-                                TvButton(
-                                    text = "Zvuková stopa (${audioTracks.size})",
-                                    onClick = { showAudioTrackModal = true }
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color(0x55FFFFFF))
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(progressFraction)
+                                        .height(if (isTimelineFocused) 12.dp else 8.dp)
+                                        .background(TvColors.NetflixRed)
                                 )
                             }
 
-                            if (subtitleTracks.isNotEmpty()) {
-                                TvButton(
-                                    text = "Titulky (${subtitleTracks.size})",
-                                    onClick = { showSubtitleTrackModal = true }
-                                )
-                            }
-
-                            if (session.resolutionResult != null && session.resolutionResult.groups.isNotEmpty()) {
-                                TvButton(
-                                    text = "Kvalita / Zdroj (${session.activeStream.quality.badge} • ${session.activeStream.language.badge})",
-                                    icon = Icons.Default.Settings,
-                                    onClick = { showQualityModal = true }
-                                )
-                            }
-
-                            if (session.nextEpisode != null) {
-                                TvButton(
-                                    text = "Další díl (${session.nextEpisode.code})",
-                                    icon = Icons.Default.SkipNext,
-                                    isPrimary = true,
-                                    onClick = onNextEpisode
-                                )
-                            }
+                            Text(
+                                text = formatDurationMs(durationMs),
+                                color = if (isTimelineFocused) Color.White else TvColors.TextSecondary,
+                                fontSize = 14.sp,
+                                fontWeight = if (isTimelineFocused) FontWeight.Bold else FontWeight.Normal
+                            )
                         }
                     }
                 }
