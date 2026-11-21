@@ -137,47 +137,121 @@ fun MediaDetailScreen(
             contentPadding = PaddingValues(top = 28.dp, bottom = 56.dp)
         ) {
             item {
+                val matchScore = remember(item.id, item.rating) {
+                    val r = item.rating ?: 8.2
+                    (r * 10).toInt().coerceIn(78, 99)
+                }
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     TvButton(
-                        text = "Zpět do katalogu",
+                        text = "Zpět",
                         icon = Icons.Default.ArrowBack,
                         paddingValues = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                         onClick = onBack
                     )
 
-                    TechBadgePill(
-                        text = if (item.type == MediaType.SERIES) "SERIÁL" else "FILM",
-                        backgroundColor = TvColors.NetflixRed
-                    )
-                    item.year?.let { TechBadgePill(text = it.toString()) }
-                    item.displayRating?.let {
-                        TechBadgePill(
-                            text = "★ $it",
-                            backgroundColor = Color(0x33F59E0B),
-                            textColor = TvColors.AccentGold
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(18.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(TvColors.NetflixRed),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "W",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                        Text(
+                            text = if (item.type == MediaType.SERIES) "SERIÁL WEBSHARE" else "FILM WEBSHARE",
+                            color = Color(0xFFD4D4D4),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 2.sp
                         )
                     }
-                    item.runtimeMinutes?.let { TechBadgePill(text = "$it min") }
-                    item.genres.forEach { g -> TechBadgePill(text = g) }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 Text(
                     text = item.title,
                     color = Color.White,
                     fontSize = 38.sp,
-                    fontWeight = FontWeight.ExtraBold
+                    fontWeight = FontWeight.Black
                 )
 
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Netflix Metadata Line
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "$matchScore% shoda",
+                        color = TvColors.VipGreen,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+
+                    item.year?.let {
+                        Text(
+                            text = it.toString(),
+                            color = Color(0xFFE5E5E5),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    item.runtimeMinutes?.let { mins ->
+                        val hrs = mins / 60
+                        val rem = mins % 60
+                        Text(
+                            text = if (hrs > 0) "${hrs}h ${rem}m" else "${rem}m",
+                            color = TvColors.TextSecondary,
+                            fontSize = 14.sp
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .border(1.dp, Color(0x88FFFFFF), RoundedCornerShape(3.dp))
+                            .padding(horizontal = 6.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = "4K • HD",
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+
+                    if (item.genres.isNotEmpty()) {
+                        Text(
+                            text = item.genres.joinToString(" • "),
+                            color = Color(0xFFD4D4D4),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
                 if (!item.originalTitle.equals(item.title, ignoreCase = true)) {
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "Originální název: ${item.originalTitle}",
-                        color = TvColors.TextSecondary,
-                        fontSize = 14.sp
+                        color = TvColors.TextMuted,
+                        fontSize = 13.sp
                     )
                 }
 

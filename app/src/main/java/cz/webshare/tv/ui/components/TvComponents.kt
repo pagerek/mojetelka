@@ -61,21 +61,21 @@ import cz.webshare.tv.model.WatchProgressItem
 import kotlinx.coroutines.delay
 
 object TvColors {
-    val Background = Color(0xFF06070A)
-    val SurfaceDark = Color(0xFF0E1017)
-    val SurfaceElevated = Color(0xFF151822)
+    val Background = Color(0xFF0A0A0A)
+    val SurfaceDark = Color(0xFF141414)
+    val SurfaceElevated = Color(0xFF1F1F1F)
     val NetflixRed = Color(0xFFE50914)
-    val NetflixRedDark = Color(0xFFB80710)
-    val AccentGold = Color(0xFFF59E0B)
-    val VipGreen = Color(0xFF10B981)
-    val TextPrimary = Color(0xFFF9FAFB)
-    val TextSecondary = Color(0xFF9CA3AF)
-    val TextMuted = Color(0xFF6B7280)
+    val NetflixRedDark = Color(0xFFB81D24)
+    val AccentGold = Color(0xFFF5C518)
+    val VipGreen = Color(0xFF46D369)
+    val TextPrimary = Color(0xFFFFFFFF)
+    val TextSecondary = Color(0xFFB3B3B3)
+    val TextMuted = Color(0xFF737373)
     val FocusBorder = Color(0xFFFFFFFF)
 }
 
 /**
- * Remote D-Pad + Click friendly TV button.
+ * Remote D-Pad + Click friendly TV button in sleek modern Netflix TV style.
  * Uses a single `.clickable()` modifier (which includes Compose's native focusable target
  * and D-Pad Center / Enter activation) so focus never gets trapped in nested focus nodes.
  */
@@ -88,45 +88,44 @@ fun TvButton(
     isPrimary: Boolean = false,
     isSelected: Boolean = false,
     subtitle: String? = null,
-    paddingValues: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 9.dp)
+    paddingValues: PaddingValues = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
 
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.06f else 1.0f,
-        animationSpec = tween(120),
+        targetValue = if (isFocused) 1.05f else 1.0f,
+        animationSpec = tween(110),
         label = "btn_scale"
     )
 
     val bgColor by animateColorAsState(
         targetValue = when {
-            isFocused && isPrimary -> Color(0xFFFF1E27)
+            isFocused && isPrimary -> Color.White
             isFocused -> Color.White
             isPrimary -> TvColors.NetflixRed
-            isSelected -> Color(0xFF1F2330)
-            else -> Color(0xFF11131B)
+            isSelected -> Color(0xFF2B2B2B)
+            else -> Color(0xCC262626)
         },
-        animationSpec = tween(120),
+        animationSpec = tween(110),
         label = "btn_bg"
     )
 
     val contentColor = when {
-        isFocused && isPrimary -> Color.White
-        isFocused -> Color(0xFF06070A)
+        isFocused -> Color(0xFF0A0A0A)
         isPrimary -> Color.White
         isSelected -> Color.White
-        else -> Color(0xFFD1D5DB)
+        else -> Color(0xFFE5E5E5)
     }
 
     val borderColor = when {
         isFocused -> Color.White
         isSelected -> TvColors.NetflixRed
-        isPrimary -> TvColors.NetflixRed
-        else -> Color(0xFF232736)
+        isPrimary -> Color.Transparent
+        else -> Color(0x33FFFFFF)
     }
 
-    val borderWidth = if (isFocused) 2.5.dp else if (isSelected) 1.5.dp else 1.dp
+    val borderWidth = if (isFocused) 2.dp else if (isSelected) 1.5.dp else 1.dp
 
     Box(
         modifier = modifier
@@ -134,9 +133,9 @@ fun TvButton(
                 scaleX = scale
                 scaleY = scale
             }
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(6.dp))
             .background(bgColor)
-            .border(borderWidth, borderColor, RoundedCornerShape(8.dp))
+            .border(borderWidth, borderColor, RoundedCornerShape(6.dp))
             .onFocusChanged { isFocused = it.isFocused }
             .clickable(
                 interactionSource = interactionSource,
@@ -155,16 +154,16 @@ fun TvButton(
                     imageVector = icon,
                     contentDescription = null,
                     tint = contentColor,
-                    modifier = Modifier.size(17.dp)
+                    modifier = Modifier.size(18.dp)
                 )
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(7.dp))
             }
             Column {
                 Text(
                     text = text,
                     color = contentColor,
                     fontSize = 13.sp,
-                    fontWeight = if (isFocused || isPrimary || isSelected) FontWeight.Bold else FontWeight.Medium,
+                    fontWeight = if (isFocused || isPrimary || isSelected) FontWeight.Bold else FontWeight.SemiBold,
                     maxLines = 1,
                     softWrap = false,
                     overflow = TextOverflow.Ellipsis
@@ -172,7 +171,7 @@ fun TvButton(
                 if (!subtitle.isNullOrEmpty()) {
                     Text(
                         text = subtitle,
-                        color = contentColor.copy(alpha = 0.78f),
+                        color = contentColor.copy(alpha = 0.75f),
                         fontSize = 10.sp,
                         maxLines = 1,
                         softWrap = false,
@@ -185,7 +184,7 @@ fun TvButton(
 }
 
 /**
- * Sleek Netflix-style top navigation tab button for Android TV.
+ * Authentic Netflix TV top navigation tab item with animated bottom active indicator bar.
  */
 @Composable
 fun TvNavTabItem(
@@ -198,58 +197,66 @@ fun TvNavTabItem(
     val interactionSource = remember { MutableInteractionSource() }
 
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.07f else 1.0f,
-        animationSpec = tween(120),
+        targetValue = if (isFocused) 1.06f else 1.0f,
+        animationSpec = tween(110),
         label = "nav_scale"
     )
 
     val bgColor = when {
         isFocused -> Color.White
-        isSelected -> TvColors.NetflixRed
         else -> Color.Transparent
     }
 
     val textColor = when {
-        isFocused -> Color(0xFF06070A)
+        isFocused -> Color(0xFF0A0A0A)
         isSelected -> Color.White
-        else -> Color(0xFFD1D5DB)
+        else -> Color(0xFFB3B3B3)
     }
 
-    Box(
+    Column(
         modifier = modifier
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
-            .clip(RoundedCornerShape(20.dp))
-            .background(bgColor)
-            .border(
-                width = if (isFocused) 2.dp else 0.dp,
-                color = if (isFocused) Color.White else Color.Transparent,
-                shape = RoundedCornerShape(20.dp)
-            )
             .onFocusChanged { isFocused = it.isFocused }
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
-            )
-            .padding(horizontal = 14.dp, vertical = 6.dp),
-        contentAlignment = Alignment.Center
+            ),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = text,
-            color = textColor,
-            fontSize = 13.sp,
-            fontWeight = if (isFocused || isSelected) FontWeight.ExtraBold else FontWeight.Medium,
-            maxLines = 1,
-            softWrap = false
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .background(bgColor)
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = text,
+                color = textColor,
+                fontSize = 14.sp,
+                fontWeight = if (isFocused || isSelected) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1,
+                softWrap = false
+            )
+        }
+        Spacer(modifier = Modifier.height(3.dp))
+        Box(
+            modifier = Modifier
+                .width(if (isSelected && !isFocused) 24.dp else 0.dp)
+                .height(3.dp)
+                .clip(RoundedCornerShape(1.5.dp))
+                .background(if (isSelected && !isFocused) TvColors.NetflixRed else Color.Transparent)
         )
     }
 }
 
 /**
- * Netflix-style poster card for Android TV D-Pad navigation.
+ * Clean Netflix-style vertical poster card for Android TV D-Pad navigation.
+ * Uncluttered poster artwork when unfocused; reveals crisp white focus frame and title when focused.
  */
 @Composable
 fun TvPosterCard(
@@ -257,15 +264,16 @@ fun TvPosterCard(
     onFocused: (CatalogItem) -> Unit,
     onClick: (CatalogItem) -> Unit,
     modifier: Modifier = Modifier,
-    width: Dp = 132.dp,
-    height: Dp = 194.dp
+    width: Dp = 136.dp,
+    height: Dp = 200.dp,
+    rankNumber: Int? = null
 ) {
     val context = LocalContext.current
     var isFocused by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
 
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.07f else 1.0f,
+        targetValue = if (isFocused) 1.08f else 1.0f,
         animationSpec = tween(120),
         label = "card_scale"
     )
@@ -274,7 +282,7 @@ fun TvPosterCard(
         item.posterUrl?.takeIf { it.isNotEmpty() }?.let { url ->
             ImageRequest.Builder(context)
                 .data(url)
-                .size(264, 388)
+                .size(272, 400)
                 .crossfade(false)
                 .build()
         }
@@ -288,12 +296,12 @@ fun TvPosterCard(
                 scaleX = scale
                 scaleY = scale
             }
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(6.dp))
             .background(TvColors.SurfaceDark)
             .border(
-                width = if (isFocused) 3.dp else 1.dp,
-                color = if (isFocused) Color.White else Color(0xFF1E2230),
-                shape = RoundedCornerShape(10.dp)
+                width = if (isFocused) 2.5.dp else 0.dp,
+                color = if (isFocused) Color.White else Color.Transparent,
+                shape = RoundedCornerShape(6.dp)
             )
             .onFocusChanged {
                 isFocused = it.isFocused
@@ -307,13 +315,13 @@ fun TvPosterCard(
                 onClick = { onClick(item) }
             )
     ) {
-        // Rich fallback gradient background while poster loads
+        // Subtle dark fallback canvas
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        listOf(Color(0xFF231520), Color(0xFF0E1018))
+                        listOf(Color(0xFF1F1F1F), Color(0xFF121212))
                     )
                 )
         )
@@ -327,83 +335,91 @@ fun TvPosterCard(
             )
         }
 
-        // Top badges (Series/Movie + Rating)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(6.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        // Minimal Netflix "W" series badge or Top 10 ribbon
+        if (rankNumber != null) {
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(
-                        if (item.type == MediaType.SERIES) Color(0xDD2563EB) else Color(0xDDE50914)
-                    )
-                    .padding(horizontal = 5.dp, vertical = 2.dp)
+                    .align(Alignment.TopEnd)
+                    .clip(RoundedCornerShape(bottomStart = 6.dp))
+                    .background(TvColors.NetflixRed)
+                    .padding(horizontal = 6.dp, vertical = 3.dp)
             ) {
                 Text(
-                    text = if (item.type == MediaType.SERIES) "SERIÁL" else "FILM",
+                    text = "TOP $rankNumber",
                     color = Color.White,
                     fontSize = 8.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    maxLines = 1,
-                    softWrap = false
+                    maxLines = 1
                 )
             }
-
-            item.displayRating?.let { rating ->
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(Color(0xDD000000))
-                        .padding(horizontal = 5.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "★ $rating",
-                        color = TvColors.AccentGold,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                }
+        } else if (item.type == MediaType.SERIES) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(Color(0xCC0A0A0A))
+                    .padding(horizontal = 5.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = "SERIÁL",
+                    color = Color(0xFFE5E5E5),
+                    fontSize = 7.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.6.sp,
+                    maxLines = 1
+                )
             }
         }
 
-        // Bottom title gradient overlay
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color(0xCC06070A),
-                            Color(0xF806070A)
+        // Show title overlay if poster URL is missing OR when card is focused
+        if (imageRequest == null || isFocused) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color(0xCC0A0A0A),
+                                Color(0xF50A0A0A)
+                            )
                         )
                     )
-                )
-                .padding(horizontal = 8.dp, vertical = 8.dp)
-        ) {
-            Column {
-                Text(
-                    text = item.title,
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (item.year != null) {
+                    .padding(horizontal = 8.dp, vertical = 7.dp)
+            ) {
+                Column {
                     Text(
-                        text = item.year.toString(),
-                        color = TvColors.TextSecondary,
-                        fontSize = 10.sp,
-                        maxLines = 1
+                        text = item.title,
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (item.year != null) {
+                            Text(
+                                text = item.year.toString(),
+                                color = TvColors.TextSecondary,
+                                fontSize = 9.sp,
+                                maxLines = 1
+                            )
+                        }
+                        item.displayRating?.let { rating ->
+                            Text(
+                                text = "${(rating.toDoubleOrNull()?.times(10)?.toInt() ?: 85)}% shoda",
+                                color = TvColors.VipGreen,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -855,14 +871,16 @@ private fun PopoverMenuItem(
 @Composable
 fun TechBadgePill(
     text: String,
-    backgroundColor: Color = Color(0xFF1A1E2B),
-    textColor: Color = Color.White
+    backgroundColor: Color = Color(0xCC1F1F1F),
+    textColor: Color = Color(0xFFE5E5E5),
+    borderColor: Color = Color(0x33FFFFFF)
 ) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(4.dp))
             .background(backgroundColor)
-            .padding(horizontal = 8.dp, vertical = 3.dp)
+            .border(0.75.dp, borderColor, RoundedCornerShape(4.dp))
+            .padding(horizontal = 7.dp, vertical = 2.5.dp)
     ) {
         Text(
             text = text,
@@ -892,26 +910,29 @@ fun TvIconButton(
 
     val scale by animateFloatAsState(
         targetValue = if (isFocused) 1.12f else 1.0f,
-        animationSpec = tween(120),
+        animationSpec = tween(110),
         label = "icon_btn_scale"
     )
 
     val bgColor by animateColorAsState(
-        targetValue = if (isFocused) Color.White else Color(0xFF161924),
-        animationSpec = tween(120),
+        targetValue = if (isFocused) Color.White else Color(0xFF1A1A1A),
+        animationSpec = tween(110),
         label = "icon_btn_bg"
     )
 
-    val iconTint = if (isFocused) Color(0xFF06070A) else Color(0xFFD1D5DB)
-    val borderColor = if (isFocused) Color.White else Color(0xFF282D3E)
+    val iconTint = if (isFocused) Color(0xFF0A0A0A) else Color(0xFFE5E5E5)
+    val borderColor = if (isFocused) Color.White else Color(0x33FFFFFF)
 
     Box(
         modifier = modifier
             .size(size)
-            .scale(scale)
-            .clip(RoundedCornerShape(10.dp))
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
-            .border(if (isFocused) 2.5.dp else 1.dp, borderColor, RoundedCornerShape(10.dp))
+            .border(if (isFocused) 2.dp else 1.dp, borderColor, RoundedCornerShape(8.dp))
             .onFocusChanged { isFocused = it.isFocused }
             .clickable(
                 interactionSource = interactionSource,

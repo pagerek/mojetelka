@@ -104,6 +104,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var searchJob: Job? = null
     private var resolveJob: Job? = null
     private var heroFocusJob: Job? = null
+    private var catalogVerificationJob: Job? = null
+    private val availabilityCache = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
 
     init {
         val ctx = application.applicationContext
@@ -193,6 +195,57 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     focusedHeroItem = it.focusedHeroItem ?: hero
                 )
             }
+            verifyAndFilterHomeSectionsOnWebshare(loadedSections)
+        }
+    }
+
+    /**
+     * Progressively checks catalog cards against Webshare.cz in the background and removes
+     * any movie/series that has zero matching video files on Webshare, so the user never
+     * clicks a card only to see "nebyly nalezeny žádné video soubory".
+     */
+    private fun verifyAndFilterHomeSectionsOnWebshare(initialSections: List<CatalogSection>) {
+        val token = prefsStore.getWebshareToken()?.takeIf { it.isNotEmpty() } ?: return
+        catalogVerificationJob?.cancel()
+        catalogVerificationJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            for (section in initialSections) {
+                val verifiedItems = mutableListOf<CatalogItem>()
+                for (chunk in section.items.chunked(4)) {
+                    val checks = chunk.map { item ->
+                        val cached = availabilityCache[item.id]
+                        if (cached != null) {
+                            item to cached
+                        } else {
+                            val ok = runCatching {
+                                streamResolver.checkAvailability(item, token)
+                            }.getOrDefault(true)
+                            availabilityCache[item.id] = ok
+                            item to ok
+                        }
+                    }
+                    checks.filter { it.second }.forEach { verifiedItems.add(it.first) }
+                }
+
+                if (verifiedItems.size != section.items.size && verifiedItems.isNotEmpty()) {
+                    _uiState.update { state ->
+                        val updatedSections = state.sections.map { sec ->
+                            if (sec.id == section.id) sec.copy(items = verifiedItems) else sec
+                        }
+                        val currentHero = state.focusedHeroItem
+                        val heroStillAvailable = currentHero == null ||
+                            availabilityCache[currentHero.id] != false
+                        val nextHero = if (heroStillAvailable) {
+                            currentHero
+                        } else {
+                            updatedSections.firstOrNull()?.items?.firstOrNull()
+                        }
+                        state.copy(
+                            sections = updatedSections,
+                            focusedHeroItem = nextHero
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -239,18 +292,79 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun performSearch(query: String) {
         _uiState.update { it.copy(isSearching = true) }
-        val results = catalogApi.searchCatalog(
+        val token = prefsStore.getWebshareToken()
+        val outcome = catalogApi.searchCatalog(
             query = query,
             tmdbApiKey = _uiState.value.preferences.tmdbApiKey,
             webshareApi = webshareApi,
-            webshareToken = prefsStore.getWebshareToken()
+            webshareToken = token
         )
+
+        // Filter and prioritize search results so only titles actually available on Webshare are shown
+        val verifiedResults = if (!token.isNullOrEmpty() && outcome.webshareFiles.isNotEmpty()) {
+            val fastMatched = outcome.items.filter { item ->
+                if (item.id.startsWith("ws_")) {
+                    true
+                } else {
+                    val count = streamResolver.countMatchingFiles(item, outcome.webshareFiles)
+                    if (count > 0) {
+                        availabilityCache[item.id] = true
+                        true
+                    } else {
+                        false
+                    }
+                }
+            }
+
+            // For top DB items whose localized/original title differed from the user's raw query,
+            // run a quick direct availability check so valid hits are never dropped.
+            val uncheckedCandidates = outcome.items
+                .filter { it !in fastMatched && !it.id.startsWith("ws_") }
+                .take(4)
+            val extraVerified = uncheckedCandidates.filter { candidate ->
+                val cached = availabilityCache[candidate.id]
+                val ok = cached ?: runCatching {
+                    streamResolver.checkAvailability(candidate, token)
+                }.getOrDefault(false)
+                availabilityCache[candidate.id] = ok
+                ok
+            }
+            (fastMatched + extraVerified).distinctBy { it.id }
+        } else {
+            outcome.items
+        }
+
         _uiState.update {
             it.copy(
                 isSearching = false,
-                searchResults = results
+                searchResults = verifiedResults
             )
         }
+    }
+
+    /**
+     * Launches playback of a [CatalogItem] directly from the Home Hero Banner without forcing the user
+     * to open the detail screen first (for movies, or when launchMode is AUTO_PREFERRED_WITH_FALLBACK).
+     */
+    fun quickPlayFromHero(item: CatalogItem) {
+        if (item.type == MediaType.SERIES || _uiState.value.preferences.launchMode == LaunchMode.ALWAYS_ASK) {
+            openMediaDetail(item)
+            return
+        }
+        resolveJob?.cancel()
+        _uiState.update {
+            it.copy(
+                activeDetailItem = item,
+                activeMediaDetails = MediaDetails(item),
+                isDetailLoading = false,
+                selectedSeasonNumber = 1,
+                selectedEpisode = null,
+                streamResolution = null,
+                streamError = null,
+                showStreamPickerModal = false
+            )
+        }
+        resolveStreamsForCurrentSelection(autoLaunchWhenDone = true, openModalWhenDone = false)
     }
 
     fun openMediaDetail(item: CatalogItem) {

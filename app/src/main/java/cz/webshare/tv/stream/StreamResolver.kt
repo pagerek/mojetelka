@@ -104,6 +104,31 @@ class StreamResolver(
             }
         }
 
+        // 3. Fallback search wave: if the initial queries (e.g. "Title 2024" or long colon subtitle)
+        //    yielded no validated files, run a broader search using plain/short title variants without year.
+        if (parsedList.isEmpty()) {
+            val fallbackQueries = buildFallbackSearchQueries(item, episode, alreadyTried = queries.toSet())
+            if (fallbackQueries.isNotEmpty()) {
+                val extraFiles = fallbackQueries.flatMap { fq ->
+                    listOf(
+                        async { webshareApi.searchVideos(fq, token, sort = "", limit = 75).getOrNull().orEmpty() },
+                        async { webshareApi.searchVideos(fq, token, sort = "largest", limit = 60).getOrNull().orEmpty() }
+                    )
+                }.awaitAll().flatten().distinctBy { it.ident }
+
+                val combinedRaw = (rawFiles + extraFiles).distinctBy { it.ident }
+                parsedList = combinedRaw.mapNotNull { file ->
+                    parseAndValidateFile(
+                        file = file,
+                        item = item,
+                        episode = episode,
+                        minSizeBytes = minSizeBytes,
+                        strictYearAndFullTitle = false
+                    )
+                }
+            }
+        }
+
         val sortedStreams = parsedList.sortedByDescending { it.score }
 
         // Group by (AudioLanguage, VideoQuality)
@@ -146,6 +171,62 @@ class StreamResolver(
             fallbackApplied = fallbackApplied,
             selectionNotice = notice
         )
+    }
+
+    /**
+     * Lightweight availability probe used for catalog cards (Home rows, search results).
+     * Uses exactly the same file-matching rules as [resolveStreams] (relaxed mode), so a title
+     * marked as available here will always yield streams when opened in the detail screen.
+     */
+    suspend fun checkAvailability(item: CatalogItem, token: String): Boolean = coroutineScope {
+        val queries = buildAvailabilityQueries(item)
+        val files = queries.map { q ->
+            async { webshareApi.searchVideos(q, token, sort = "", limit = 50).getOrNull().orEmpty() }
+        }.awaitAll().flatten().distinctBy { it.ident }
+        countMatchingFiles(item, files) > 0
+    }
+
+    /**
+     * Counts how many of the given raw Webshare files really belong to [item]
+     * (movie: title + year + no episode marker; series: title + any SxxEyy episode marker).
+     */
+    fun countMatchingFiles(item: CatalogItem, files: List<WebshareFile>): Int {
+        if (files.isEmpty()) return 0
+        val anyEpisodeRegex = Regex("(?i)\\bS(\\d{1,2})[._ -]?E(\\d{1,3})\\b|\\b(\\d{1,2})x(\\d{2})\\b")
+        return files.count { file ->
+            if (item.type == MediaType.SERIES) {
+                val match = anyEpisodeRegex.find(file.name) ?: return@count false
+                val season = match.groupValues[1].ifEmpty { match.groupValues[3] }.toIntOrNull()
+                    ?: return@count false
+                val episodeNum = match.groupValues[2].ifEmpty { match.groupValues[4] }.toIntOrNull()
+                    ?: return@count false
+                parseAndValidateFile(
+                    file = file,
+                    item = item,
+                    episode = EpisodeInfo(seasonNumber = season, episodeNumber = episodeNum, title = "", overview = ""),
+                    minSizeBytes = 45L * 1024 * 1024,
+                    strictYearAndFullTitle = false
+                ) != null
+            } else {
+                parseAndValidateFile(
+                    file = file,
+                    item = item,
+                    episode = null,
+                    minSizeBytes = 110L * 1024 * 1024,
+                    strictYearAndFullTitle = false
+                ) != null
+            }
+        }
+    }
+
+    private fun buildAvailabilityQueries(item: CatalogItem): List<String> {
+        val all = buildSearchQueries(item, null)
+        return if (item.type == MediaType.SERIES) {
+            // Series files rarely contain the premiere year -> search plain title variants
+            all.filter { q -> item.year == null || !q.endsWith(" ${item.year}") }.take(3)
+        } else {
+            all.take(3)
+        }
     }
 
     /**
@@ -193,25 +274,65 @@ class StreamResolver(
         if (episode != null) {
             val sCode = episode.code // e.g. S01E02
             val xCode = "${episode.seasonNumber}x%02d".format(episode.episodeNumber)
+            val dotCode = "S%02d.E%02d".format(episode.seasonNumber, episode.episodeNumber)
+            val czEpCode = "${episode.seasonNumber} serie ${episode.episodeNumber} dil"
             for (variant in titleVariants) {
                 queries.add("$variant $sCode")
+                queries.add("$variant $xCode")
             }
-            queries.add("${item.title.trim()} $xCode")
-            if (!item.originalTitle.equals(item.title, ignoreCase = true) && item.originalTitle.isNotBlank()) {
-                queries.add("${item.originalTitle.trim()} $xCode")
-            }
+            val primaryTitle = titleVariants.firstOrNull() ?: item.title.trim()
+            queries.add("$primaryTitle $dotCode")
+            queries.add("$primaryTitle $czEpCode")
         } else {
             val yearSuffix = item.year?.toString() ?: ""
-            if (yearSuffix.isNotEmpty()) {
-                for (variant in titleVariants) {
+            // Interleave year-qualified and plain title queries so both CZ and Original titles are searched!
+            for (variant in titleVariants.take(3)) {
+                if (yearSuffix.isNotEmpty()) {
                     queries.add("$variant $yearSuffix")
                 }
+                queries.add(variant)
             }
-            for (variant in titleVariants) {
+            for (variant in titleVariants.drop(3)) {
                 queries.add(variant)
             }
         }
         return queries.take(6)
+    }
+
+    private fun buildFallbackSearchQueries(
+        item: CatalogItem,
+        episode: EpisodeInfo?,
+        alreadyTried: Set<String>
+    ): List<String> {
+        val candidates = linkedSetOf<String>()
+        val rawTitles = listOf(item.title.trim(), item.originalTitle.trim()).distinct()
+        for (t in rawTitles) {
+            if (t.isEmpty()) continue
+            val deaccented = normalizeTextPreservingSpaces(t)
+            val withoutArticle = deaccented.removePrefix("the ").removePrefix("a ").trim()
+            val beforeColon = deaccented.substringBefore(':').trim()
+            val afterColon = deaccented.substringAfter(':', "").trim()
+
+            if (episode != null) {
+                val eOnly = "E%02d".format(episode.episodeNumber)
+                val dilOnly = "${episode.episodeNumber} dil"
+                candidates.add("$deaccented $eOnly")
+                candidates.add("$deaccented $dilOnly")
+                if (withoutArticle.length >= 3) {
+                    candidates.add("$withoutArticle ${episode.code}")
+                }
+            } else {
+                candidates.add(deaccented)
+                if (withoutArticle.length >= 3) candidates.add(withoutArticle)
+                if (beforeColon.length >= 3 && item.year != null) {
+                    candidates.add("$beforeColon ${item.year}")
+                }
+                if (afterColon.length >= 4 && item.year != null) {
+                    candidates.add("$afterColon ${item.year}")
+                }
+            }
+        }
+        return candidates.filter { it.isNotBlank() && it !in alreadyTried }.take(4)
     }
 
     private data class TitleMatchScore(

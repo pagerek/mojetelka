@@ -317,9 +317,9 @@ private fun SettingsCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(TvColors.SurfaceDark)
-            .border(1.dp, Color(0xFF222636), RoundedCornerShape(14.dp))
+            .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(8.dp))
             .padding(18.dp)
     ) {
         Text(

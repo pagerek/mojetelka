@@ -313,6 +313,12 @@ fun VideoPlayerScreen(
                     val keyCode = event.nativeKeyEvent.keyCode
                     lastInteractionTime = System.currentTimeMillis()
 
+                    if (keyCode == KeyEvent.KEYCODE_MEDIA_STOP || keyCode == KeyEvent.KEYCODE_MEDIA_CLOSE) {
+                        exoPlayer.pause()
+                        onBack()
+                        return@onPreviewKeyEvent true
+                    }
+
                     if (keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE) {
                         when {
                             showQualityModal -> {

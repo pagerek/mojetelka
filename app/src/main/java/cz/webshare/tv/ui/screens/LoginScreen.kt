@@ -60,8 +60,8 @@ fun LoginScreen(
             .background(
                 Brush.radialGradient(
                     colors = listOf(
-                        Color(0xFF260B12),
-                        Color(0xFF0E1017),
+                        Color(0xFF2B070A),
+                        Color(0xFF121212),
                         TvColors.Background
                     ),
                     radius = 1200f
@@ -72,9 +72,9 @@ fun LoginScreen(
         Column(
             modifier = Modifier
                 .width(500.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color(0xEE13151F))
-                .border(1.dp, Color(0xFF2B2F42), RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xF2141414))
+                .border(1.dp, Color(0x26FFFFFF), RoundedCornerShape(10.dp))
                 .padding(horizontal = 40.dp, vertical = 36.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {

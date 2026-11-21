@@ -9,6 +9,7 @@ import cz.webshare.tv.model.SeasonInfo
 import cz.webshare.tv.model.WebshareFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -16,6 +17,15 @@ import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
+
+/**
+ * Result of a catalog search: deduplicated title cards + the raw Webshare files that were found,
+ * so the caller can immediately confirm which titles are really streamable.
+ */
+data class CatalogSearchOutcome(
+    val items: List<CatalogItem>,
+    val webshareFiles: List<WebshareFile>
+)
 
 class CatalogApi(
     private val client: OkHttpClient = WebshareApi.defaultHttpClient()
@@ -47,44 +57,81 @@ class CatalogApi(
     /**
      * Searches movies and TV series across TMDB / Cinemeta AND clusters raw Webshare video files
      * into deduplicated title cards so even obscure Czech movies appear as single Netflix cards.
+     *
+     * Webshare full-text search matches file names, which are usually written without diacritics,
+     * with dots instead of spaces and with compound words ("Spiderman"). We therefore query several
+     * normalized variants (relevance + largest sort) and also return the raw files, so the caller can
+     * instantly verify which catalog titles really exist on Webshare.
      */
     suspend fun searchCatalog(
         query: String,
         tmdbApiKey: String,
         webshareApi: WebshareApi,
         webshareToken: String?
-    ): List<CatalogItem> = withContext(Dispatchers.IO) {
+    ): CatalogSearchOutcome = withContext(Dispatchers.IO) {
         val trimmed = query.trim()
-        if (trimmed.isEmpty()) return@withContext emptyList()
+        if (trimmed.isEmpty()) return@withContext CatalogSearchOutcome(emptyList(), emptyList())
+
+        val deaccented = stripDiacritics(trimmed)
+        val compound = trimmed.replace(Regex("(?<=\\p{L})[-\\s](?=\\p{L})"), "")
+        val webshareQueries = linkedSetOf(trimmed, deaccented)
+        if (compound.length >= 4 && !compound.equals(trimmed, ignoreCase = true)) {
+            webshareQueries.add(stripDiacritics(compound))
+        }
 
         coroutineScope {
             val cleanKey = tmdbApiKey.trim()
             val dbDeferred = async {
-                if (cleanKey.isNotEmpty()) {
+                val primary = if (cleanKey.isNotEmpty()) {
                     runCatching { searchTmdb(trimmed, cleanKey) }.getOrNull()
                         ?.takeIf { it.isNotEmpty() }
                         ?: searchCinemetaAndCurated(trimmed)
                 } else {
                     searchCinemetaAndCurated(trimmed)
                 }
-            }
-
-            val wsDeferred = async {
-                if (!webshareToken.isNullOrEmpty()) {
-                    webshareApi.searchVideos(trimmed, webshareToken, sort = "largest", limit = 60)
-                        .getOrNull()
-                        .orEmpty()
+                if (primary.isEmpty() && !deaccented.equals(trimmed, ignoreCase = true)) {
+                    searchCinemetaAndCurated(deaccented)
                 } else {
-                    emptyList()
+                    primary
                 }
             }
 
+            val wsDeferred = webshareQueries.flatMap { q ->
+                listOf(
+                    async {
+                        if (webshareToken.isNullOrEmpty()) emptyList()
+                        else webshareApi.searchVideos(q, webshareToken, sort = "", limit = 80).getOrNull().orEmpty()
+                    },
+                    async {
+                        if (webshareToken.isNullOrEmpty()) emptyList()
+                        else webshareApi.searchVideos(q, webshareToken, sort = "largest", limit = 40).getOrNull().orEmpty()
+                    }
+                )
+            }
+
             val dbItems = dbDeferred.await()
-            val wsFiles = wsDeferred.await()
+            val wsFiles = wsDeferred.awaitAll().flatten().distinctBy { it.ident }
 
             val clusteredWsItems = clusterWebshareFilesIntoCatalogItems(trimmed, wsFiles, dbItems)
-            (dbItems + clusteredWsItems).distinctBy {
-                "${it.type}_${normalizeForComparison(it.title)}_${it.year ?: 0}"
+            val items = (dbItems + clusteredWsItems).distinctBy {
+                "${it.type}_${normalizeForComparison(it.title).replace(" ", "")}_${it.year ?: 0}"
+            }
+            CatalogSearchOutcome(items = items, webshareFiles = wsFiles)
+        }
+    }
+
+    private fun stripDiacritics(text: String): String {
+        val map = mapOf(
+            'á' to 'a', 'č' to 'c', 'ď' to 'd', 'é' to 'e', 'ě' to 'e',
+            'í' to 'i', 'ň' to 'n', 'ó' to 'o', 'ř' to 'r', 'š' to 's',
+            'ť' to 't', 'ú' to 'u', 'ů' to 'u', 'ý' to 'y', 'ž' to 'z',
+            'ľ' to 'l', 'ĺ' to 'l', 'ô' to 'o', 'ä' to 'a', 'ŕ' to 'r'
+        )
+        return buildString(text.length) {
+            for (ch in text) {
+                val lower = ch.lowercaseChar()
+                val mapped = map[lower]
+                if (mapped != null) append(if (ch.isUpperCase()) mapped.uppercaseChar() else mapped) else append(ch)
             }
         }
     }
@@ -487,10 +534,11 @@ class CatalogApi(
         existingDbItems: List<CatalogItem>
     ): List<CatalogItem> {
         if (files.isEmpty()) return emptyList()
+        // Compare without spaces too, so "Spiderman" cluster is not duplicated next to the "Spider-Man" DB card
         val existingKeys = existingDbItems.flatMap {
             listOf(
-                normalizeForComparison(it.title),
-                normalizeForComparison(it.originalTitle)
+                normalizeForComparison(it.title).replace(" ", ""),
+                normalizeForComparison(it.originalTitle).replace(" ", "")
             )
         }.toSet()
 
@@ -517,7 +565,7 @@ class CatalogApi(
 
             val extracted = extractCleanTitleAndYearFromFilename(file.name) ?: continue
             val norm = normalizeForComparison(extracted.first)
-            if (norm.length < 2 || norm in existingKeys) continue
+            if (norm.length < 2 || norm.replace(" ", "") in existingKeys) continue
 
             val extractedTokens = norm.split(" ").filter { it.isNotEmpty() }
             val extractedCollapsed = extractedTokens.joinToString("")
@@ -766,7 +814,11 @@ class CatalogApi(
             "tt22022452" to "V hlavě 2",
             "tt0111161" to "Vykoupení z věznice Shawshank",
             "tt0068646" to "Kmotr",
+            "tt0071562" to "Kmotr II",
             "tt0468569" to "Temný rytíř",
+            "tt1345836" to "Temný rytíř povstal",
+            "tt0372784" to "Batman začíná",
+            "tt1877830" to "Batman",
             "tt0108052" to "Schindlerův seznam",
             "tt0167260" to "Pán prstenů: Návrat krále",
             "tt0120737" to "Pán prstenů: Společenstvo Prstenu",
@@ -783,7 +835,60 @@ class CatalogApi(
             "tt12637874" to "Fallout",
             "tt2788316" to "Šógun",
             "tt7366338" to "Černobyl",
-            "tt0109830" to "Forrest Gump"
+            "tt0109830" to "Forrest Gump",
+            "tt0110912" to "Pulp Fiction: Historky z podsvětí",
+            "tt0137523" to "Klub rváčů",
+            "tt0120815" to "Zachraňte vojína Ryana",
+            "tt0120689" to "Zelená míle",
+            "tt0114369" to "Sedm",
+            "tt0102926" to "Mlčení jehňátek",
+            "tt0076759" to "Star Wars: Nová naděje",
+            "tt0080684" to "Star Wars: Impérium vrací úder",
+            "tt0086190" to "Star Wars: Návrat Jediů",
+            "tt0103064" to "Terminátor 2: Den zúčtování",
+            "tt0088763" to "Návrat do budoucnosti",
+            "tt0110357" to "Lví král",
+            "tt0245429" to "Cesta do fantazie",
+            "tt6751668" to "Parazit",
+            "tt7286456" to "Joker",
+            "tt4154796" to "Avengers: Endgame",
+            "tt4154756" to "Avengers: Infinity War",
+            "tt0848228" to "Avengers",
+            "tt10872600" to "Spider-Man: Bez domova",
+            "tt6320628" to "Spider-Man: Daleko od domova",
+            "tt2250912" to "Spider-Man: Homecoming",
+            "tt0145487" to "Spider-Man",
+            "tt0316654" to "Spider-Man 2",
+            "tt0413300" to "Spider-Man 3",
+            "tt4633694" to "Spider-Man: Paralelní světy",
+            "tt9362722" to "Spider-Man: Napříč paralelními světy",
+            "tt1630029" to "Avatar: The Way of Water",
+            "tt0499549" to "Avatar",
+            "tt1745960" to "Top Gun: Maverick",
+            "tt0993846" to "Vlk z Wall Street",
+            "tt0361748" to "Hanebný pancharti",
+            "tt1853728" to "Nespoutaný Django",
+            "tt1392190" to "Šílený Max: Zběsilá cesta",
+            "tt2911666" to "John Wick",
+            "tt0241527" to "Harry Potter a Kámen mudrců",
+            "tt0295297" to "Harry Potter a Tajemná komnata",
+            "tt0304141" to "Harry Potter a vězeň z Azkabanu",
+            "tt0330373" to "Harry Potter a Ohnivý pohár",
+            "tt0325980" to "Piráti z Karibiku: Prokletí Černé perly",
+            "tt1190634" to "Banda",
+            "tt2861424" to "Rick a Morty",
+            "tt0386676" to "Kancl",
+            "tt0108778" to "Přátelé",
+            "tt1475582" to "Sherlock",
+            "tt2442560" to "Gangy z Birminghamu",
+            "tt0455275" to "Útěk z vězení",
+            "tt0412142" to "Dr. House",
+            "tt0944947" to "Hra o trůny",
+            "tt2356777" to "Temný případ",
+            "tt2802850" to "Fargo",
+            "tt8111088" to "Mandalorian",
+            "tt13443470" to "Wednesday",
+            "tt10919420" to "Hra na oliheň"
         )
         return map[imdbId] ?: originalName
     }
