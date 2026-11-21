@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <path
+        android:fillColor="#0F1016"
+        android:pathData="M0,0h320v180h-320z" />
+    <path
+        android:fillColor="#1A1C26"
+        android:pathData="M0,140h320v40h-320z" />
+    <path
+        android:fillColor="#E50914"
+        android:pathData="M0,0h8v180h-8z" />
+    <!-- Big W monogram -->
+    <path
+        android:fillColor="#E50914"
+        android:pathData="M56,46 L72,46 L83,104 L97,58 L111,58 L125,104 L136,46 L152,46 L133,130 L117,130 L104,84 L91,130 L75,130 Z" />
+    <!-- Play triangle accent -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M180,58 L236,88 L180,118 Z" />
+</vector>
