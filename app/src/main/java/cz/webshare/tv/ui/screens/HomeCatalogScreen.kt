@@ -1,5 +1,6 @@
 package cz.webshare.tv.ui.screens
 
+import android.view.KeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -25,12 +26,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,17 +53,21 @@ import cz.webshare.tv.ui.components.TvNavTabItem
 import cz.webshare.tv.ui.components.tvBringIntoViewContainer
 import cz.webshare.tv.ui.components.TvPosterCard
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun TopNavigationBar(
     activeTab: NavTab,
     userProfile: WebshareUserProfile?,
     preferences: UserPreferences,
-    onSelectTab: (NavTab) -> Unit
+    onSelectTab: (NavTab) -> Unit,
+    settingsLeftFocusRequester: FocusRequester? = null
 ) {
-    val homeTabFocusRequester = remember { FocusRequester() }
+    val tabFocusRequesters = remember {
+        NavTab.entries.associateWith { FocusRequester() }
+    }
 
     LaunchedEffect(Unit) {
-        runCatching { homeTabFocusRequester.requestFocus() }
+        runCatching { tabFocusRequesters[NavTab.HOME]?.requestFocus() }
     }
 
     Row(
@@ -79,7 +87,23 @@ fun TopNavigationBar(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .focusProperties {
+                    enter = { tabFocusRequesters[activeTab] ?: FocusRequester.Default }
+                }
+                .onPreviewKeyEvent { event ->
+                    if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
+                        event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
+                        activeTab == NavTab.SETTINGS &&
+                        settingsLeftFocusRequester != null
+                    ) {
+                        runCatching { settingsLeftFocusRequester.requestFocus() }
+                        true
+                    } else {
+                        false
+                    }
+                },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -105,8 +129,9 @@ fun TopNavigationBar(
             Spacer(modifier = Modifier.width(6.dp))
 
             NavTab.entries.forEach { tab ->
-                val tabModifier = if (tab == NavTab.HOME) {
-                    Modifier.focusRequester(homeTabFocusRequester)
+                val requester = tabFocusRequesters[tab]
+                val tabModifier = if (requester != null) {
+                    Modifier.focusRequester(requester)
                 } else {
                     Modifier
                 }

@@ -251,10 +251,10 @@ fun TvNavTabItem(
         Spacer(modifier = Modifier.height(3.dp))
         Box(
             modifier = Modifier
-                .width(if (isSelected && !isFocused) 24.dp else 0.dp)
+                .width(if (isSelected) 24.dp else 0.dp)
                 .height(3.dp)
                 .clip(RoundedCornerShape(1.5.dp))
-                .background(if (isSelected && !isFocused) TvColors.NetflixRed else Color.Transparent)
+                .background(if (isSelected) TvColors.NetflixRed else Color.Transparent)
         )
     }
 }

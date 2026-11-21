@@ -57,12 +57,14 @@ enum class LaunchMode(val labelCz: String, val descriptionCz: String) {
     )
 }
 
+const val DEFAULT_TMDB_API_KEY = "e1ac986d9062e91abb6f6152289caf56"
+
 @Immutable
 data class UserPreferences(
     val preferredQuality: VideoQuality = VideoQuality.FHD_1080P,
     val preferredLanguage: AudioLanguage = AudioLanguage.CZ_SK,
     val launchMode: LaunchMode = LaunchMode.AUTO_PREFERRED_WITH_FALLBACK,
-    val tmdbApiKey: String = ""
+    val tmdbApiKey: String = DEFAULT_TMDB_API_KEY
 )
 
 @Immutable

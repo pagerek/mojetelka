@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import cz.webshare.tv.model.AudioLanguage
 import cz.webshare.tv.model.CatalogItem
+import cz.webshare.tv.model.DEFAULT_TMDB_API_KEY
 import cz.webshare.tv.model.LaunchMode
 import cz.webshare.tv.model.MediaType
 import cz.webshare.tv.model.UserPreferences
@@ -48,7 +49,9 @@ class PreferencesStore(context: Context) {
         val qualName = prefs.getString(KEY_PREF_QUALITY, VideoQuality.FHD_1080P.name)
         val langName = prefs.getString(KEY_PREF_LANGUAGE, AudioLanguage.CZ_SK.name)
         val modeName = prefs.getString(KEY_LAUNCH_MODE, LaunchMode.AUTO_PREFERRED_WITH_FALLBACK.name)
-        val tmdbKey = prefs.getString(KEY_TMDB_API_KEY, "") ?: ""
+        val tmdbKey = prefs.getString(KEY_TMDB_API_KEY, DEFAULT_TMDB_API_KEY)
+            ?.takeIf { it.isNotBlank() }
+            ?: DEFAULT_TMDB_API_KEY
 
         val quality = runCatching { VideoQuality.valueOf(qualName!!) }.getOrDefault(VideoQuality.FHD_1080P)
         val language = runCatching { AudioLanguage.valueOf(langName!!) }.getOrDefault(AudioLanguage.CZ_SK)

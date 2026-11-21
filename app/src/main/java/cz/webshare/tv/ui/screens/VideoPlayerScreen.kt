@@ -77,6 +77,7 @@ import cz.webshare.tv.ui.ActivePlaybackSession
 import cz.webshare.tv.ui.components.TechBadgePill
 import cz.webshare.tv.ui.components.TvButton
 import cz.webshare.tv.ui.components.TvColors
+import cz.webshare.tv.ui.components.TvIconButton
 import kotlinx.coroutines.delay
 
 data class EmbeddedTrackOption(
@@ -393,8 +394,11 @@ fun VideoPlayerScreen(
                                     true
                                 }
                                 KeyEvent.KEYCODE_DPAD_CENTER,
-                                KeyEvent.KEYCODE_ENTER -> {
-                                    togglePlayPause()
+                                KeyEvent.KEYCODE_ENTER,
+                                KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                                    if (event.nativeKeyEvent.repeatCount == 0) {
+                                        togglePlayPause()
+                                    }
                                     true
                                 }
                                 KeyEvent.KEYCODE_DPAD_DOWN -> {
@@ -418,6 +422,18 @@ fun VideoPlayerScreen(
                             // OSD is visible and one of the buttons is focused -> let standard D-Pad move between buttons
                             false
                         }
+                    }
+                } else if (event.nativeKeyEvent.action == KeyEvent.ACTION_UP) {
+                    val keyCode = event.nativeKeyEvent.keyCode
+                    if (!anyModalOpen && (!showControls || isTimelineFocused) &&
+                        (keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+                            keyCode == KeyEvent.KEYCODE_ENTER ||
+                            keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER)
+                    ) {
+                        // Consume ACTION_UP so the timeline's clickable() never fires a second togglePlayPause()
+                        true
+                    } else {
+                        false
                     }
                 } else {
                     false
@@ -621,15 +637,17 @@ fun VideoPlayerScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            TvButton(
-                                text = if (audioTracks.size > 1) "Zvuk (${audioTracks.size})" else "Zvuk",
+                            TvIconButton(
                                 icon = Icons.Default.VolumeUp,
+                                contentDescription = "Zvuk",
+                                size = 38.dp,
                                 onClick = { showAudioTrackModal = true }
                             )
 
-                            TvButton(
-                                text = if (subtitleTracks.isNotEmpty()) "Titulky (${subtitleTracks.size})" else "Titulky",
+                            TvIconButton(
                                 icon = Icons.Default.Subtitles,
+                                contentDescription = "Titulky",
+                                size = 38.dp,
                                 onClick = { showSubtitleTrackModal = true }
                             )
 

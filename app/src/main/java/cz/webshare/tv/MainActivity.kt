@@ -16,7 +16,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import cz.webshare.tv.model.MediaDetails
 import cz.webshare.tv.model.MediaType
 import cz.webshare.tv.ui.MainViewModel
@@ -149,12 +151,14 @@ fun WebshareTvApp(viewModel: MainViewModel) {
 
             // 4. Main Netflix-style Shell with Top Navigation
             else -> {
+                val settingsLeftFocusRequester = remember { FocusRequester() }
                 Column(modifier = Modifier.fillMaxSize()) {
                     TopNavigationBar(
                         activeTab = state.activeTab,
                         userProfile = state.userProfile,
                         preferences = state.preferences,
-                        onSelectTab = { viewModel.selectTab(it) }
+                        onSelectTab = { viewModel.selectTab(it) },
+                        settingsLeftFocusRequester = settingsLeftFocusRequester
                     )
 
                     Box(
@@ -264,7 +268,8 @@ fun WebshareTvApp(viewModel: MainViewModel) {
                                     onSelectLaunchMode = { viewModel.updateLaunchMode(it) },
                                     onSaveTmdbKey = { viewModel.updateTmdbApiKey(it) },
                                     onCheckGitUpdate = { viewModel.checkAndInstallGitUpdate() },
-                                    onLogout = { viewModel.logout() }
+                                    onLogout = { viewModel.logout() },
+                                    leftMenuFocusRequester = settingsLeftFocusRequester
                                 )
                             }
                         }

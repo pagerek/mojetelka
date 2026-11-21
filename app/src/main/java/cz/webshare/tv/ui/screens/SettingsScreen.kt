@@ -44,6 +44,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -87,7 +89,8 @@ fun SettingsScreen(
     onSelectLaunchMode: (LaunchMode) -> Unit,
     onSaveTmdbKey: (String) -> Unit,
     onCheckGitUpdate: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    leftMenuFocusRequester: FocusRequester = remember { FocusRequester() }
 ) {
     var selectedCategory by remember { mutableStateOf(SettingsCategory.PLAYBACK) }
     var tmdbInput by remember(preferences.tmdbApiKey) { mutableStateOf(preferences.tmdbApiKey) }
@@ -133,6 +136,11 @@ fun SettingsScreen(
                     subtitle = summary,
                     icon = category.icon,
                     isSelected = selectedCategory == category,
+                    modifier = if (selectedCategory == category) {
+                        Modifier.focusRequester(leftMenuFocusRequester)
+                    } else {
+                        Modifier
+                    },
                     onSelect = { selectedCategory = category }
                 )
             }
@@ -440,7 +448,8 @@ private fun SettingsNavItem(
     subtitle: String,
     icon: ImageVector,
     isSelected: Boolean,
-    onSelect: () -> Unit
+    onSelect: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
@@ -465,7 +474,7 @@ private fun SettingsNavItem(
     val secondaryColor = if (isFocused) Color(0xFF4A4A4A) else TvColors.TextSecondary
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .graphicsLayer {
                 scaleX = scale

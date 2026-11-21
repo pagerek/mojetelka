@@ -1,6 +1,6 @@
 {
-  "versionCode": 7,
-  "versionName": "1.3.2",
+  "versionCode": 8,
+  "versionName": "1.3.3",
   "apkUrl": "https://raw.githubusercontent.com/pagerek/mojetelka/main/WebshareTV.apk",
-  "changelog": "Nové dvousloupcové UI Nastavení, oprava ořezávání při D-Pad scrollování v celé aplikaci a vylepšení přehrávače"
+  "changelog": "Vestavěný TMDB API klíč (CZ katalog), sjednocená časová osa s Play/Pause, oprava OK v přehrávači, vylepšená TV navigace"
 }
