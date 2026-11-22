@@ -34,6 +34,7 @@ enum class NavTab(val labelCz: String) {
     SEARCH("Hledat"),
     MOVIES("Filmy"),
     SERIES("Seriály"),
+    KIDS("Děti"),
     MY_LIST("Můj seznam"),
     SETTINGS("Nastavení")
 }
@@ -59,6 +60,8 @@ data class UiState(
     val activeTab: NavTab = NavTab.HOME,
     val isCatalogLoading: Boolean = false,
     val sections: List<CatalogSection> = emptyList(),
+    val isKidsLoading: Boolean = false,
+    val kidsSections: List<CatalogSection> = emptyList(),
     val focusedHeroItem: CatalogItem? = null,
 
     val searchQuery: String = "",
@@ -105,6 +108,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var resolveJob: Job? = null
     private var heroFocusJob: Job? = null
     private var catalogVerificationJob: Job? = null
+    private var kidsVerificationJob: Job? = null
     private val availabilityCache = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
 
     init {
@@ -195,7 +199,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     focusedHeroItem = it.focusedHeroItem ?: hero
                 )
             }
-            verifyAndFilterHomeSectionsOnWebshare(loadedSections)
+            catalogVerificationJob?.cancel()
+            catalogVerificationJob = verifySectionsOnWebshare(
+                initialSections = loadedSections,
+                getSections = { it.sections },
+                setSections = { state, updated, nextHero ->
+                    state.copy(sections = updated, focusedHeroItem = nextHero)
+                }
+            )
+        }
+    }
+
+    fun loadKidsCatalog() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isKidsLoading = true) }
+            val tmdbKey = _uiState.value.preferences.tmdbApiKey
+            val loadedSections = catalogApi.loadKidsSections(tmdbKey)
+            val hero = loadedSections.firstOrNull()?.items?.firstOrNull()
+            _uiState.update {
+                it.copy(
+                    isKidsLoading = false,
+                    kidsSections = loadedSections,
+                    focusedHeroItem = hero ?: it.focusedHeroItem
+                )
+            }
+            kidsVerificationJob?.cancel()
+            kidsVerificationJob = verifySectionsOnWebshare(
+                initialSections = loadedSections,
+                getSections = { it.kidsSections },
+                setSections = { state, updated, nextHero ->
+                    state.copy(kidsSections = updated, focusedHeroItem = nextHero)
+                }
+            )
         }
     }
 
@@ -204,10 +239,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * any movie/series that has zero matching video files on Webshare, so the user never
      * clicks a card only to see "nebyly nalezeny žádné video soubory".
      */
-    private fun verifyAndFilterHomeSectionsOnWebshare(initialSections: List<CatalogSection>) {
-        val token = prefsStore.getWebshareToken()?.takeIf { it.isNotEmpty() } ?: return
-        catalogVerificationJob?.cancel()
-        catalogVerificationJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+    private fun verifySectionsOnWebshare(
+        initialSections: List<CatalogSection>,
+        getSections: (UiState) -> List<CatalogSection>,
+        setSections: (UiState, List<CatalogSection>, CatalogItem?) -> UiState
+    ): Job? {
+        val token = prefsStore.getWebshareToken()?.takeIf { it.isNotEmpty() } ?: return null
+        return viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             for (section in initialSections) {
                 val verifiedItems = mutableListOf<CatalogItem>()
                 for (chunk in section.items.chunked(4)) {
@@ -228,7 +266,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 if (verifiedItems.size != section.items.size && verifiedItems.isNotEmpty()) {
                     _uiState.update { state ->
-                        val updatedSections = state.sections.map { sec ->
+                        val updatedSections = getSections(state).map { sec ->
                             if (sec.id == section.id) sec.copy(items = verifiedItems) else sec
                         }
                         val currentHero = state.focusedHeroItem
@@ -239,10 +277,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         } else {
                             updatedSections.firstOrNull()?.items?.firstOrNull()
                         }
-                        state.copy(
-                            sections = updatedSections,
-                            focusedHeroItem = nextHero
-                        )
+                        setSections(state, updatedSections, nextHero)
                     }
                 }
             }
@@ -256,6 +291,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 activeDetailItem = null,
                 showStreamPickerModal = false
             )
+        }
+        if (tab == NavTab.KIDS && _uiState.value.kidsSections.isEmpty() && !_uiState.value.isKidsLoading) {
+            loadKidsCatalog()
         }
     }
 

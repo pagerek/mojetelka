@@ -55,6 +55,21 @@ class CatalogApi(
         }
 
     /**
+     * Loads kid-friendly and family sections for the "Děti" tab across a broad age range.
+     */
+    suspend fun loadKidsSections(tmdbApiKey: String): List<CatalogSection> =
+        withContext(Dispatchers.IO) {
+            val cleanKey = tmdbApiKey.trim()
+            if (cleanKey.isNotEmpty()) {
+                val tmdbKids = runCatching { loadTmdbKidsSections(cleanKey) }.getOrNull()
+                if (!tmdbKids.isNullOrEmpty()) {
+                    return@withContext tmdbKids
+                }
+            }
+            loadCinemetaKidsSections()
+        }
+
+    /**
      * Searches movies and TV series across TMDB / Cinemeta AND clusters raw Webshare video files
      * into deduplicated title cards so even obscure Czech movies appear as single Netflix cards.
      *
@@ -174,14 +189,35 @@ class CatalogApi(
     // -------------------------------------------------------------------------
 
     private suspend fun loadTmdbHomeSections(apiKey: String): List<CatalogSection> = coroutineScope {
+        val christmasDef = async {
+            fetchTmdbList(
+                "$TMDB_BASE/discover/movie?with_keywords=207317&sort_by=popularity.desc&language=cs-CZ&api_key=$apiKey",
+                MediaType.MOVIE
+            )
+        }
         val trendingMoviesDef = async {
             fetchTmdbList("$TMDB_BASE/trending/movie/week?language=cs-CZ&api_key=$apiKey", MediaType.MOVIE)
         }
         val popularSeriesDef = async {
             fetchTmdbList("$TMDB_BASE/trending/tv/week?language=cs-CZ&api_key=$apiKey", MediaType.SERIES)
         }
-        val topMoviesDef = async {
-            fetchTmdbList("$TMDB_BASE/movie/top_rated?language=cs-CZ&api_key=$apiKey", MediaType.MOVIE)
+        val dramaDef = async {
+            fetchTmdbList(
+                "$TMDB_BASE/discover/movie?with_genres=18&sort_by=popularity.desc&language=cs-CZ&api_key=$apiKey",
+                MediaType.MOVIE
+            )
+        }
+        val thrillerDef = async {
+            fetchTmdbList(
+                "$TMDB_BASE/discover/movie?with_genres=53&sort_by=popularity.desc&language=cs-CZ&api_key=$apiKey",
+                MediaType.MOVIE
+            )
+        }
+        val documentaryDef = async {
+            fetchTmdbList(
+                "$TMDB_BASE/discover/movie?with_genres=99&sort_by=popularity.desc&language=cs-CZ&api_key=$apiKey",
+                MediaType.MOVIE
+            )
         }
         val sciFiActionDef = async {
             fetchTmdbList(
@@ -189,19 +225,85 @@ class CatalogApi(
                 MediaType.MOVIE
             )
         }
+        val comedyDef = async {
+            fetchTmdbList(
+                "$TMDB_BASE/discover/movie?with_genres=35&sort_by=popularity.desc&language=cs-CZ&api_key=$apiKey",
+                MediaType.MOVIE
+            )
+        }
+        val topMoviesDef = async {
+            fetchTmdbList("$TMDB_BASE/movie/top_rated?language=cs-CZ&api_key=$apiKey", MediaType.MOVIE)
+        }
+
+        val curatedChristmas = christmasMoviesSection().items
+        val tmdbChristmas = christmasDef.await()
+        val combinedChristmas = mergeUniqueCatalogItems(curatedChristmas, tmdbChristmas)
 
         buildList {
+            if (combinedChristmas.isNotEmpty()) {
+                add(CatalogSection("christmas_movies", "Vánoční filmy a pohádky", combinedChristmas))
+            }
             val trending = trendingMoviesDef.await()
             if (trending.isNotEmpty()) add(CatalogSection("trending_movies", "Trendy filmy týdne", trending))
 
             val series = popularSeriesDef.await()
             if (series.isNotEmpty()) add(CatalogSection("trending_series", "Populární seriály", series))
 
+            val drama = dramaDef.await()
+            if (drama.isNotEmpty()) add(CatalogSection("drama_movies", "Drama", drama))
+
+            val thriller = thrillerDef.await()
+            if (thriller.isNotEmpty()) add(CatalogSection("thriller_movies", "Thriller a napětí", thriller))
+
+            val docs = documentaryDef.await()
+            if (docs.isNotEmpty()) add(CatalogSection("documentary_movies", "Dokumenty", docs))
+
             val sciFi = sciFiActionDef.await()
             if (sciFi.isNotEmpty()) add(CatalogSection("scifi_action", "Akční a Sci-Fi trháky", sciFi))
 
+            val comedy = comedyDef.await()
+            if (comedy.isNotEmpty()) add(CatalogSection("comedy_movies", "Komedie", comedy))
+
             val top = topMoviesDef.await()
             if (top.isNotEmpty()) add(CatalogSection("top_movies", "Nejlépe hodnocené filmy", top))
+        }
+    }
+
+    private suspend fun loadTmdbKidsSections(apiKey: String): List<CatalogSection> = coroutineScope {
+        val animatedMoviesDef = async {
+            fetchTmdbList(
+                "$TMDB_BASE/discover/movie?with_genres=16,10751&include_adult=false&sort_by=popularity.desc&language=cs-CZ&api_key=$apiKey",
+                MediaType.MOVIE
+            )
+        }
+        val familyAdventureDef = async {
+            fetchTmdbList(
+                "$TMDB_BASE/discover/movie?with_genres=10751,12,14&include_adult=false&certification_country=US&certification.lte=PG-13&sort_by=popularity.desc&language=cs-CZ&api_key=$apiKey",
+                MediaType.MOVIE
+            )
+        }
+        val kidsSeriesDef = async {
+            fetchTmdbList(
+                "$TMDB_BASE/discover/tv?with_genres=16,10751&include_adult=false&sort_by=popularity.desc&language=cs-CZ&api_key=$apiKey",
+                MediaType.SERIES
+            )
+        }
+
+        val animated = mergeUniqueCatalogItems(kidsCuratedAnimatedSection().items, animatedMoviesDef.await())
+        val series = mergeUniqueCatalogItems(kidsCuratedSeriesSection().items, kidsSeriesDef.await())
+        val adventure = familyAdventureDef.await()
+
+        buildList {
+            add(kidsCuratedCzechSection())
+            if (animated.isNotEmpty()) {
+                add(CatalogSection("kids_animated_movies", "Animované a rodinné filmy", animated))
+            }
+            if (series.isNotEmpty()) {
+                add(CatalogSection("kids_series", "Dětské a rodinné seriály", series))
+            }
+            if (adventure.isNotEmpty()) {
+                add(CatalogSection("kids_adventure", "Dobrodružství a fantasy", adventure))
+            }
         }
     }
 
@@ -354,18 +456,47 @@ class CatalogApi(
         val topSeriesDef = async {
             fetchCinemetaCatalog("$CINEMETA_BASE/catalog/series/top.json", MediaType.SERIES, limit = 25)
         }
+        val dramaMoviesDef = async {
+            fetchCinemetaCatalog("$CINEMETA_BASE/catalog/movie/top/genre=Drama.json", MediaType.MOVIE, limit = 20)
+        }
+        val thrillerMoviesDef = async {
+            fetchCinemetaCatalog("$CINEMETA_BASE/catalog/movie/top/genre=Thriller.json", MediaType.MOVIE, limit = 20)
+        }
+        val docMoviesDef = async {
+            fetchCinemetaCatalog("$CINEMETA_BASE/catalog/movie/top/genre=Documentary.json", MediaType.MOVIE, limit = 20)
+        }
+        val comedyMoviesDef = async {
+            fetchCinemetaCatalog("$CINEMETA_BASE/catalog/movie/top/genre=Comedy.json", MediaType.MOVIE, limit = 20)
+        }
         val popularMoviesDef = async {
             fetchCinemetaCatalog("$CINEMETA_BASE/catalog/movie/year/year=2024.json", MediaType.MOVIE, limit = 20)
         }
 
         val topMovies = topMoviesDef.await()
         val topSeries = topSeriesDef.await()
+        val dramaMovies = dramaMoviesDef.await()
+        val thrillerMovies = thrillerMoviesDef.await()
+        val docMovies = docMoviesDef.await()
+        val comedyMovies = comedyMoviesDef.await()
         val recentMovies = popularMoviesDef.await()
 
         buildList {
+            add(christmasMoviesSection())
             add(czechAndSlovakHitsSection())
             if (topMovies.isNotEmpty()) {
                 add(CatalogSection("top_movies", "Trendy a nejoblíbenější filmy", topMovies))
+            }
+            if (dramaMovies.isNotEmpty()) {
+                add(CatalogSection("drama_movies", "Drama", dramaMovies))
+            }
+            if (thrillerMovies.isNotEmpty()) {
+                add(CatalogSection("thriller_movies", "Thriller a napětí", thrillerMovies))
+            }
+            if (docMovies.isNotEmpty()) {
+                add(CatalogSection("documentary_movies", "Dokumenty", docMovies))
+            }
+            if (comedyMovies.isNotEmpty()) {
+                add(CatalogSection("comedy_movies", "Komedie", comedyMovies))
             }
             if (topSeries.isNotEmpty()) {
                 add(CatalogSection("top_series", "Populární seriály", topSeries))
@@ -374,6 +505,35 @@ class CatalogApi(
                 add(CatalogSection("recent_movies", "Filmové novinky", recentMovies))
             }
             add(czechAndSlovakSeriesSection())
+        }
+    }
+
+    private suspend fun loadCinemetaKidsSections(): List<CatalogSection> = coroutineScope {
+        val animatedMoviesDef = async {
+            fetchCinemetaCatalog("$CINEMETA_BASE/catalog/movie/top/genre=Animation.json", MediaType.MOVIE, limit = 20)
+        }
+        val familyMoviesDef = async {
+            fetchCinemetaCatalog("$CINEMETA_BASE/catalog/movie/top/genre=Family.json", MediaType.MOVIE, limit = 20)
+        }
+        val animatedSeriesDef = async {
+            fetchCinemetaCatalog("$CINEMETA_BASE/catalog/series/top/genre=Animation.json", MediaType.SERIES, limit = 20)
+        }
+
+        val animatedMovies = mergeUniqueCatalogItems(kidsCuratedAnimatedSection().items, animatedMoviesDef.await())
+        val familyMovies = familyMoviesDef.await()
+        val animatedSeries = mergeUniqueCatalogItems(kidsCuratedSeriesSection().items, animatedSeriesDef.await())
+
+        buildList {
+            add(kidsCuratedCzechSection())
+            if (animatedMovies.isNotEmpty()) {
+                add(CatalogSection("kids_animated_movies", "Animované a rodinné filmy", animatedMovies))
+            }
+            if (familyMovies.isNotEmpty()) {
+                add(CatalogSection("kids_family_movies", "Dobrodružství a fantasy", familyMovies))
+            }
+            if (animatedSeries.isNotEmpty()) {
+                add(CatalogSection("kids_series", "Dětské a rodinné seriály", animatedSeries))
+            }
         }
     }
 
@@ -636,6 +796,479 @@ class CatalogApi(
     // -------------------------------------------------------------------------
     // Curated Czech & Slovak Hits (Works Immediately Out-of-the-Box)
     // -------------------------------------------------------------------------
+
+    private fun mergeUniqueCatalogItems(
+        primary: List<CatalogItem>,
+        secondary: List<CatalogItem>
+    ): List<CatalogItem> {
+        val seenKeys = LinkedHashSet<String>()
+        val merged = ArrayList<CatalogItem>(primary.size + secondary.size)
+        for (item in primary + secondary) {
+            val key = item.imdbId?.takeIf { it.isNotBlank() }
+                ?: normalizeForComparison(item.title)
+            if (seenKeys.add(key)) {
+                merged.add(item)
+            }
+        }
+        return merged
+    }
+
+    private fun christmasMoviesSection(): CatalogSection = CatalogSection(
+        id = "christmas_movies",
+        title = "Vánoční filmy a pohádky",
+        items = listOf(
+            CatalogItem(
+                id = "xmas_tri_orisky_1973",
+                imdbId = "tt0070832",
+                type = MediaType.MOVIE,
+                title = "Tři oříšky pro Popelku",
+                originalTitle = "Tri orisky pro Popelku",
+                year = 1973,
+                overview = "Nejslavnější česká vánoční pohádka o chytré Popelce, třech kouzelných oříšcích a princi, kterého si musí sama získat.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0070832/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0070832/img",
+                rating = 8.4,
+                genres = listOf("Pohádka", "Rodinný", "Vánoční"),
+                runtimeMinutes = 82
+            ),
+            CatalogItem(
+                id = "xmas_sam_doma_1990",
+                imdbId = "tt0099785",
+                type = MediaType.MOVIE,
+                title = "Sám doma",
+                originalTitle = "Home Alone",
+                year = 1990,
+                overview = "Osmiletý Kevin zůstane omylem sám doma na Vánoce a musí ubránit dům před dvojicí nešikovných zlodějů.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0099785/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0099785/img",
+                rating = 7.7,
+                genres = listOf("Komedie", "Rodinný", "Vánoční"),
+                runtimeMinutes = 103
+            ),
+            CatalogItem(
+                id = "xmas_pelisky_1999",
+                imdbId = "tt0167331",
+                type = MediaType.MOVIE,
+                title = "Pelíšky",
+                originalTitle = "Pelisky",
+                year = 1999,
+                overview = "Kultovní česká vánoční komedie Jana Hřebejka o dvou sousedských rodinách v pražské vile na přelomu let 1967 a 1968.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0167331/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0167331/img",
+                rating = 8.6,
+                genres = listOf("Komedie", "Drama", "Vánoční"),
+                runtimeMinutes = 116
+            ),
+            CatalogItem(
+                id = "xmas_andel_pane_2005",
+                imdbId = "tt0430880",
+                type = MediaType.MOVIE,
+                title = "Anděl Páně",
+                originalTitle = "Andel Pane",
+                year = 2005,
+                overview = "Popletený anděl Petronel a škodolibý čert Uriáš musí na Štědrý den napravit alespoň jednoho hříšníka.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0430880/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0430880/img",
+                rating = 7.8,
+                genres = listOf("Pohádka", "Komedie", "Vánoční"),
+                runtimeMinutes = 91
+            ),
+            CatalogItem(
+                id = "xmas_andel_pane_2_2016",
+                imdbId = "tt5981728",
+                type = MediaType.MOVIE,
+                title = "Anděl Páně 2",
+                originalTitle = "Andel Pane 2",
+                year = 2016,
+                overview = "Anděl Petronel a čert Uriáš se na předvečer svatého Mikuláše vydávají na Zem najít ztracené jablko Poznání.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt5981728/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt5981728/img",
+                rating = 7.7,
+                genres = listOf("Pohádka", "Komedie", "Vánoční"),
+                runtimeMinutes = 99
+            ),
+            CatalogItem(
+                id = "xmas_s_certy_nejsou_zerty_1984",
+                imdbId = "tt0089950",
+                type = MediaType.MOVIE,
+                title = "S čerty nejsou žerty",
+                originalTitle = "S certy nejsou zerty",
+                year = 1984,
+                overview = "Legendární česká pohádka o poctivém Petrovi Máchalovi, chamtivé maceše a spravedlivém pekle.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0089950/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0089950/img",
+                rating = 8.4,
+                genres = listOf("Pohádka", "Komedie", "Rodinný"),
+                runtimeMinutes = 91
+            ),
+            CatalogItem(
+                id = "xmas_sam_doma_2_1992",
+                imdbId = "tt0104431",
+                type = MediaType.MOVIE,
+                title = "Sám doma 2: Ztracen v New Yorku",
+                originalTitle = "Home Alone 2: Lost in New York",
+                year = 1992,
+                overview = "Kevin na letišti nastoupí do špatného letadla a místo na Floridě prožije Vánoce sám v New Yorku.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0104431/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0104431/img",
+                rating = 6.9,
+                genres = listOf("Komedie", "Rodinný", "Vánoční"),
+                runtimeMinutes = 120
+            ),
+            CatalogItem(
+                id = "xmas_laska_nebeska_2003",
+                imdbId = "tt0314331",
+                type = MediaType.MOVIE,
+                title = "Láska nebeská",
+                originalTitle = "Love Actually",
+                year = 2003,
+                overview = "Osm propletených milostných příběhů v předvánočním Londýně plném humoru, dojetí a sváteční atmosféry.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0314331/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0314331/img",
+                rating = 7.6,
+                genres = listOf("Romantický", "Komedie", "Vánoční"),
+                runtimeMinutes = 135
+            ),
+            CatalogItem(
+                id = "xmas_klaus_2019",
+                imdbId = "tt4729430",
+                type = MediaType.MOVIE,
+                title = "Klaus",
+                originalTitle = "Klaus",
+                year = 2019,
+                overview = "Rozmazlený pošťák je poslán za polární kruh, kde se spřátelí se samotářským výrobcem hraček Klausem.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt4729430/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt4729430/img",
+                rating = 8.2,
+                genres = listOf("Animovaný", "Rodinný", "Vánoční"),
+                runtimeMinutes = 96
+            ),
+            CatalogItem(
+                id = "xmas_grinch_2018",
+                imdbId = "tt2709692",
+                type = MediaType.MOVIE,
+                title = "Grinch",
+                originalTitle = "The Grinch",
+                year = 2018,
+                overview = "Bručounský zelený Grinch se rozhodne zkazit obyvatelům městečka Kdosice Vánoce tím, že jim je ukradne.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt2709692/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt2709692/img",
+                rating = 6.4,
+                genres = listOf("Animovaný", "Komedie", "Vánoční"),
+                runtimeMinutes = 85
+            ),
+            CatalogItem(
+                id = "xmas_polarni_expres_2004",
+                imdbId = "tt0338348",
+                type = MediaType.MOVIE,
+                title = "Polární expres",
+                originalTitle = "The Polar Express",
+                year = 2004,
+                overview = "Chlapec, který pochybuje o existenci Santy, nastoupí na Štědrý večer do kouzelného vlaku mířícího na severní pól.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0338348/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0338348/img",
+                rating = 6.6,
+                genres = listOf("Animovaný", "Dobrodružný", "Vánoční"),
+                runtimeMinutes = 100
+            ),
+            CatalogItem(
+                id = "xmas_vanocni_koleda_2009",
+                imdbId = "tt1067106",
+                type = MediaType.MOVIE,
+                title = "Vánoční koleda",
+                originalTitle = "A Christmas Carol",
+                year = 2009,
+                overview = "Lakotného Ebenezera Scrooge navštíví o Vánocích tři duchové, aby mu ukázali jeho minulost, přítomnost i budoucnost.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt1067106/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt1067106/img",
+                rating = 6.8,
+                genres = listOf("Animovaný", "Rodinný", "Vánoční"),
+                runtimeMinutes = 96
+            )
+        )
+    )
+
+    private fun kidsCuratedCzechSection(): CatalogSection = CatalogSection(
+        id = "kids_curated_cz",
+        title = "České pohádky a rodinné hity",
+        items = listOf(
+            CatalogItem(
+                id = "kids_tri_orisky_1973",
+                imdbId = "tt0070832",
+                type = MediaType.MOVIE,
+                title = "Tři oříšky pro Popelku",
+                originalTitle = "Tri orisky pro Popelku",
+                year = 1973,
+                overview = "Klasická česká pohádka o chytré Popelce a třech kouzelných oříšcích.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0070832/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0070832/img",
+                rating = 8.4,
+                genres = listOf("Pohádka", "Rodinný"),
+                runtimeMinutes = 82
+            ),
+            CatalogItem(
+                id = "kids_s_certy_1984",
+                imdbId = "tt0089950",
+                type = MediaType.MOVIE,
+                title = "S čerty nejsou žerty",
+                originalTitle = "S certy nejsou zerty",
+                year = 1984,
+                overview = "Petr Máchal, zlá macecha a spravedlivé peklo v jedné z nejoblíbenějších českých pohádek.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0089950/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0089950/img",
+                rating = 8.4,
+                genres = listOf("Pohádka", "Komedie"),
+                runtimeMinutes = 91
+            ),
+            CatalogItem(
+                id = "kids_andel_pane_2005",
+                imdbId = "tt0430880",
+                type = MediaType.MOVIE,
+                title = "Anděl Páně",
+                originalTitle = "Andel Pane",
+                year = 2005,
+                overview = "Anděl Petronel a čert Uriáš se vydávají na Zem napravit hříšníka.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0430880/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0430880/img",
+                rating = 7.8,
+                genres = listOf("Pohádka", "Komedie"),
+                runtimeMinutes = 91
+            ),
+            CatalogItem(
+                id = "kids_andel_pane_2_2016",
+                imdbId = "tt5981728",
+                type = MediaType.MOVIE,
+                title = "Anděl Páně 2",
+                originalTitle = "Andel Pane 2",
+                year = 2016,
+                overview = "Pokračování dobrodružství anděla Petronela a čerta Uriáše při hledání ztraceného jablka.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt5981728/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt5981728/img",
+                rating = 7.7,
+                genres = listOf("Pohádka", "Rodinný"),
+                runtimeMinutes = 99
+            ),
+            CatalogItem(
+                id = "kids_lotrando_1997",
+                imdbId = "tt0120735",
+                type = MediaType.MOVIE,
+                title = "Lotrando a Zubejda",
+                originalTitle = "Lotrando a Zubejda",
+                year = 1997,
+                overview = "Loupežnický synek Lotrando se vydává do světa a poznává nemocnou princeznu Zubejdu.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0120735/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0120735/img",
+                rating = 7.8,
+                genres = listOf("Pohádka", "Komedie"),
+                runtimeMinutes = 99
+            ),
+            CatalogItem(
+                id = "kids_at_ziji_duchove_1977",
+                imdbId = "tt0075705",
+                type = MediaType.MOVIE,
+                title = "Ať žijí duchové!",
+                originalTitle = "At ziji duchove!",
+                year = 1977,
+                overview = "Parta dětí se snaží zachránit starý hrad Brtník a pomáhají jim při tom kouzelní duchové i trpaslíci.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0075705/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0075705/img",
+                rating = 7.9,
+                genres = listOf("Rodinný", "Pohádka", "Komedie"),
+                runtimeMinutes = 84
+            ),
+            CatalogItem(
+                id = "kids_tajemstvi_stare_bambitky_2011",
+                imdbId = "tt2114461",
+                type = MediaType.MOVIE,
+                title = "Tajemství staré bambitky",
+                originalTitle = "Tajemstvi stare bambitky",
+                year = 2011,
+                overview = "Hrnčířův učeň Jakub a vesnická dívka Anička se postaví chamtivým rádcům mladého krále.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt2114461/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt2114461/img",
+                rating = 7.0,
+                genres = listOf("Pohádka", "Rodinný"),
+                runtimeMinutes = 86
+            )
+        )
+    )
+
+    private fun kidsCuratedAnimatedSection(): CatalogSection = CatalogSection(
+        id = "kids_curated_animated",
+        title = "Animované a rodinné filmy",
+        items = listOf(
+            CatalogItem(
+                id = "kids_jak_vycvicit_draka_2010",
+                imdbId = "tt0892769",
+                type = MediaType.MOVIE,
+                title = "Jak vycvičit draka",
+                originalTitle = "How to Train Your Dragon",
+                year = 2010,
+                overview = "Mladý Viking Škyťák se nečekaně spřátelí se zraněným drakem Bezzubkou.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0892769/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0892769/img",
+                rating = 8.1,
+                genres = listOf("Animovaný", "Dobrodružný", "Rodinný"),
+                runtimeMinutes = 98
+            ),
+            CatalogItem(
+                id = "kids_zootropolis_2016",
+                imdbId = "tt2948356",
+                type = MediaType.MOVIE,
+                title = "Zootropolis: Město zvířat",
+                originalTitle = "Zootopia",
+                year = 2016,
+                overview = "Zaječí policistka Judy a mazaný lišák Nick vyšetřují záhadné zmizení v metropoli zvířat.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt2948356/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt2948356/img",
+                rating = 8.0,
+                genres = listOf("Animovaný", "Dobrodružný", "Komedie"),
+                runtimeMinutes = 108
+            ),
+            CatalogItem(
+                id = "kids_v_hlave_2015",
+                imdbId = "tt2096673",
+                type = MediaType.MOVIE,
+                title = "V hlavě",
+                originalTitle = "Inside Out",
+                year = 2015,
+                overview = "Nahlédněte do hlavy jedenáctileté Riley, kde o slovo bojují Radost, Smutek, Vztek, Strach a Nechuť.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt2096673/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt2096673/img",
+                rating = 8.1,
+                genres = listOf("Animovaný", "Rodinný", "Komedie"),
+                runtimeMinutes = 95
+            ),
+            CatalogItem(
+                id = "kids_toy_story_1995",
+                imdbId = "tt0114709",
+                type = MediaType.MOVIE,
+                title = "Toy Story: Příběh hraček",
+                originalTitle = "Toy Story",
+                year = 1995,
+                overview = "Kovboj Woody a vesmírný strážce Buzz Rakeťák prožívají velké dobrodružství, když si lidé nedívají.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0114709/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0114709/img",
+                rating = 8.3,
+                genres = listOf("Animovaný", "Dobrodružný", "Rodinný"),
+                runtimeMinutes = 81
+            ),
+            CatalogItem(
+                id = "kids_hledase_nemo_2003",
+                imdbId = "tt0266543",
+                type = MediaType.MOVIE,
+                title = "Hledá se Nemo",
+                originalTitle = "Finding Nemo",
+                year = 2003,
+                overview = "Bázlivý klaun očkatý Marlin se vydává přes celý oceán zachránit svého syna Nema.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0266543/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0266543/img",
+                rating = 8.2,
+                genres = listOf("Animovaný", "Dobrodružný", "Rodinný"),
+                runtimeMinutes = 100
+            ),
+            CatalogItem(
+                id = "kids_shrek_2001",
+                imdbId = "tt0126029",
+                type = MediaType.MOVIE,
+                title = "Shrek",
+                originalTitle = "Shrek",
+                year = 2001,
+                overview = "Zelený zlobr Shrek a upovídaný Oslík vyrážejí vysvobodit princeznu Fionu z dračí věže.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0126029/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0126029/img",
+                rating = 7.9,
+                genres = listOf("Animovaný", "Komedie", "Fantasy"),
+                runtimeMinutes = 90
+            ),
+            CatalogItem(
+                id = "kids_coco_2017",
+                imdbId = "tt2380307",
+                type = MediaType.MOVIE,
+                title = "Coco",
+                originalTitle = "Coco",
+                year = 2017,
+                overview = "Malý Miguel sní o hudbě a ocitne se v barevné Říši mrtvých, kde hledá rodinné tajemství.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt2380307/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt2380307/img",
+                rating = 8.4,
+                genres = listOf("Animovaný", "Rodinný", "Fantasy"),
+                runtimeMinutes = 105
+            )
+        )
+    )
+
+    private fun kidsCuratedSeriesSection(): CatalogSection = CatalogSection(
+        id = "kids_curated_series",
+        title = "Dětské a rodinné seriály",
+        items = listOf(
+            CatalogItem(
+                id = "kids_pat_a_mat_1976",
+                imdbId = "tt0825995",
+                type = MediaType.SERIES,
+                title = "Pat a Mat",
+                originalTitle = "Pat a Mat",
+                year = 1976,
+                overview = "Kultovní český večerníček o dvou nešikovných, ale nezdolných kutilech.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0825995/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0825995/img",
+                rating = 8.4,
+                genres = listOf("Animovaný", "Komedie", "Rodinný")
+            ),
+            CatalogItem(
+                id = "kids_krkonosske_pohadky_1974",
+                imdbId = "tt0324869",
+                type = MediaType.SERIES,
+                title = "Krkonošské pohádky",
+                originalTitle = "Krkonosske pohadky",
+                year = 1974,
+                overview = "Krakonoš, Trautenberk, Anče, Kuba a hajný v legendárním českém večerníčku.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0324869/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0324869/img",
+                rating = 8.4,
+                genres = listOf("Pohádka", "Rodinný")
+            ),
+            CatalogItem(
+                id = "kids_byl_jednou_jeden_zivot_1987",
+                imdbId = "tt0284735",
+                type = MediaType.SERIES,
+                title = "Byl jednou jeden… život",
+                originalTitle = "Il était une fois... la vie",
+                year = 1987,
+                overview = "Kultovní animovaný seriál, který dětem zábavně vysvětluje, jak funguje lidské tělo.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0284735/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0284735/img",
+                rating = 8.4,
+                genres = listOf("Animovaný", "Rodinný")
+            ),
+            CatalogItem(
+                id = "kids_avatar_aang_2005",
+                imdbId = "tt0417299",
+                type = MediaType.SERIES,
+                title = "Avatar: Legenda o Aangovi",
+                originalTitle = "Avatar: The Last Airbender",
+                year = 2005,
+                overview = "Mladý vládce větru Aang se musí naučit ovládat všechny čtyři živly a přinést světu mír.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0417299/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0417299/img",
+                rating = 9.3,
+                genres = listOf("Animovaný", "Dobrodružný", "Fantasy")
+            ),
+            CatalogItem(
+                id = "kids_gravity_falls_2012",
+                imdbId = "tt1865718",
+                type = MediaType.SERIES,
+                title = "Městečko záhad",
+                originalTitle = "Gravity Falls",
+                year = 2012,
+                overview = "Dvojčata Dipper a Mabel tráví prázdniny u prastrýčka Stana v městečku plném nadpřirozených záhad.",
+                posterUrl = "https://images.metahub.space/poster/medium/tt1865718/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt1865718/img",
+                rating = 8.9,
+                genres = listOf("Animovaný", "Dobrodružný", "Mystery")
+            )
+        )
+    )
 
     private fun czechAndSlovakHitsSection(): CatalogSection = CatalogSection(
         id = "cz_sk_hits",

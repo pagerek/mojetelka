@@ -28,6 +28,7 @@ import cz.webshare.tv.model.MediaDetails
 import cz.webshare.tv.model.MediaType
 import cz.webshare.tv.ui.MainViewModel
 import cz.webshare.tv.ui.NavTab
+import cz.webshare.tv.ui.components.KidsAmbilightContainer
 import cz.webshare.tv.ui.components.TvColors
 import cz.webshare.tv.ui.screens.HomeCatalogScreen
 import cz.webshare.tv.ui.screens.LoginScreen
@@ -161,6 +162,7 @@ fun WebshareTvApp(viewModel: MainViewModel) {
                     NavTab.HOME -> Color(0xFF280B10)      // Subtle crimson
                     NavTab.MOVIES -> Color(0xFF0A2347)    // Rich sapphire blue
                     NavTab.SERIES -> Color(0xFF09211C)    // Deep emerald teal
+                    NavTab.KIDS -> Color(0xFF091B2E)      // Vivid kids teal-blue
                     NavTab.SEARCH -> Color(0xFF1E0F2E)    // Deep violet
                     NavTab.MY_LIST -> Color(0xFF261A09)   // Warm amber
                     NavTab.SETTINGS -> Color(0xFF17181C)  // Neutral cool charcoal
@@ -170,83 +172,90 @@ fun WebshareTvApp(viewModel: MainViewModel) {
                     animationSpec = tween(durationMillis = 350),
                     label = "tab_bg_tint"
                 )
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    animatedTint,
-                                    TvColors.Background,
-                                    TvColors.Background
-                                )
-                            )
+                val shellContent: @Composable () -> Unit = {
+                    Column(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        TopNavigationBar(
+                            activeTab = state.activeTab,
+                            userProfile = state.userProfile,
+                            preferences = state.preferences,
+                            onSelectTab = { viewModel.selectTab(it) },
+                            settingsLeftFocusRequester = settingsLeftFocusRequester
                         )
-                ) {
-                    TopNavigationBar(
-                        activeTab = state.activeTab,
-                        userProfile = state.userProfile,
-                        preferences = state.preferences,
-                        onSelectTab = { viewModel.selectTab(it) },
-                        settingsLeftFocusRequester = settingsLeftFocusRequester
-                    )
 
-                    Crossfade(
-                        targetState = state.activeTab,
-                        animationSpec = tween(durationMillis = 220),
-                        label = "tab_content_crossfade",
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxSize()
-                    ) { activeTab ->
-                        when (activeTab) {
-                            NavTab.HOME -> {
-                                HomeCatalogScreen(
-                                    sections = state.sections,
-                                    watchHistory = state.watchHistory,
-                                    filterType = null,
-                                    isLoading = state.isCatalogLoading,
-                                    onFocusItem = { viewModel.updateFocusedHero(it) },
-                                    onOpenDetail = { viewModel.openMediaDetail(it) },
-                                    onResumeHistory = { viewModel.resumeFromWatchHistory(it, startFromBeginning = false) },
-                                    onRestartHistoryFromBeginning = { viewModel.resumeFromWatchHistory(it, startFromBeginning = true) },
-                                    onMarkHistoryWatched = { viewModel.markWatchHistoryAsWatched(it) },
-                                    onRemoveHistoryItem = { viewModel.removeFromWatchHistory(it) },
-                                    onOpenHistoryDetail = { viewModel.openDetailFromWatchHistory(it) }
-                                )
-                            }
+                        Crossfade(
+                            targetState = state.activeTab,
+                            animationSpec = tween(durationMillis = 220),
+                            label = "tab_content_crossfade",
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxSize()
+                        ) { activeTab ->
+                            when (activeTab) {
+                                NavTab.HOME -> {
+                                    HomeCatalogScreen(
+                                        sections = state.sections,
+                                        watchHistory = state.watchHistory,
+                                        filterType = null,
+                                        isLoading = state.isCatalogLoading,
+                                        onFocusItem = { viewModel.updateFocusedHero(it) },
+                                        onOpenDetail = { viewModel.openMediaDetail(it) },
+                                        onResumeHistory = { viewModel.resumeFromWatchHistory(it, startFromBeginning = false) },
+                                        onRestartHistoryFromBeginning = { viewModel.resumeFromWatchHistory(it, startFromBeginning = true) },
+                                        onMarkHistoryWatched = { viewModel.markWatchHistoryAsWatched(it) },
+                                        onRemoveHistoryItem = { viewModel.removeFromWatchHistory(it) },
+                                        onOpenHistoryDetail = { viewModel.openDetailFromWatchHistory(it) }
+                                    )
+                                }
 
-                            NavTab.MOVIES -> {
-                                HomeCatalogScreen(
-                                    sections = state.sections,
-                                    watchHistory = state.watchHistory,
-                                    filterType = MediaType.MOVIE,
-                                    isLoading = state.isCatalogLoading,
-                                    onFocusItem = { viewModel.updateFocusedHero(it) },
-                                    onOpenDetail = { viewModel.openMediaDetail(it) },
-                                    onResumeHistory = { viewModel.resumeFromWatchHistory(it, startFromBeginning = false) },
-                                    onRestartHistoryFromBeginning = { viewModel.resumeFromWatchHistory(it, startFromBeginning = true) },
-                                    onMarkHistoryWatched = { viewModel.markWatchHistoryAsWatched(it) },
-                                    onRemoveHistoryItem = { viewModel.removeFromWatchHistory(it) },
-                                    onOpenHistoryDetail = { viewModel.openDetailFromWatchHistory(it) }
-                                )
-                            }
+                                NavTab.MOVIES -> {
+                                    HomeCatalogScreen(
+                                        sections = state.sections,
+                                        watchHistory = state.watchHistory,
+                                        filterType = MediaType.MOVIE,
+                                        isLoading = state.isCatalogLoading,
+                                        onFocusItem = { viewModel.updateFocusedHero(it) },
+                                        onOpenDetail = { viewModel.openMediaDetail(it) },
+                                        onResumeHistory = { viewModel.resumeFromWatchHistory(it, startFromBeginning = false) },
+                                        onRestartHistoryFromBeginning = { viewModel.resumeFromWatchHistory(it, startFromBeginning = true) },
+                                        onMarkHistoryWatched = { viewModel.markWatchHistoryAsWatched(it) },
+                                        onRemoveHistoryItem = { viewModel.removeFromWatchHistory(it) },
+                                        onOpenHistoryDetail = { viewModel.openDetailFromWatchHistory(it) }
+                                    )
+                                }
 
-                            NavTab.SERIES -> {
-                                HomeCatalogScreen(
-                                    sections = state.sections,
-                                    watchHistory = state.watchHistory,
-                                    filterType = MediaType.SERIES,
-                                    isLoading = state.isCatalogLoading,
-                                    onFocusItem = { viewModel.updateFocusedHero(it) },
-                                    onOpenDetail = { viewModel.openMediaDetail(it) },
-                                    onResumeHistory = { viewModel.resumeFromWatchHistory(it, startFromBeginning = false) },
-                                    onRestartHistoryFromBeginning = { viewModel.resumeFromWatchHistory(it, startFromBeginning = true) },
-                                    onMarkHistoryWatched = { viewModel.markWatchHistoryAsWatched(it) },
-                                    onRemoveHistoryItem = { viewModel.removeFromWatchHistory(it) },
-                                    onOpenHistoryDetail = { viewModel.openDetailFromWatchHistory(it) }
-                                )
-                            }
+                                NavTab.SERIES -> {
+                                    HomeCatalogScreen(
+                                        sections = state.sections,
+                                        watchHistory = state.watchHistory,
+                                        filterType = MediaType.SERIES,
+                                        isLoading = state.isCatalogLoading,
+                                        onFocusItem = { viewModel.updateFocusedHero(it) },
+                                        onOpenDetail = { viewModel.openMediaDetail(it) },
+                                        onResumeHistory = { viewModel.resumeFromWatchHistory(it, startFromBeginning = false) },
+                                        onRestartHistoryFromBeginning = { viewModel.resumeFromWatchHistory(it, startFromBeginning = true) },
+                                        onMarkHistoryWatched = { viewModel.markWatchHistoryAsWatched(it) },
+                                        onRemoveHistoryItem = { viewModel.removeFromWatchHistory(it) },
+                                        onOpenHistoryDetail = { viewModel.openDetailFromWatchHistory(it) }
+                                    )
+                                }
+
+                                NavTab.KIDS -> {
+                                    HomeCatalogScreen(
+                                        sections = state.kidsSections,
+                                        watchHistory = emptyList(),
+                                        filterType = null,
+                                        isLoading = state.isKidsLoading,
+                                        onFocusItem = { viewModel.updateFocusedHero(it) },
+                                        onOpenDetail = { viewModel.openMediaDetail(it) },
+                                        onResumeHistory = { viewModel.resumeFromWatchHistory(it, startFromBeginning = false) },
+                                        onRestartHistoryFromBeginning = { viewModel.resumeFromWatchHistory(it, startFromBeginning = true) },
+                                        onMarkHistoryWatched = { viewModel.markWatchHistoryAsWatched(it) },
+                                        onRemoveHistoryItem = { viewModel.removeFromWatchHistory(it) },
+                                        onOpenHistoryDetail = { viewModel.openDetailFromWatchHistory(it) }
+                                    )
+                                }
 
                             NavTab.SEARCH -> {
                                 SearchScreen(
@@ -294,6 +303,31 @@ fun WebshareTvApp(viewModel: MainViewModel) {
                                 )
                             }
                         }
+                    }
+                }
+                }
+
+                if (state.activeTab == NavTab.KIDS) {
+                    val ambilightImageUrl = state.focusedHeroItem?.backdropUrl
+                        ?: state.focusedHeroItem?.posterUrl
+                    KidsAmbilightContainer(imageUrl = ambilightImageUrl) {
+                        shellContent()
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        animatedTint,
+                                        TvColors.Background,
+                                        TvColors.Background
+                                    )
+                                )
+                            )
+                    ) {
+                        shellContent()
                     }
                 }
             }
