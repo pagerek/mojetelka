@@ -11,8 +11,8 @@ android {
         applicationId = "cz.webshare.tv"
         minSdk = 23
         targetSdk = 34
-        versionCode = 9
-        versionName = "1.3.4"
+        versionCode = 10
+        versionName = "1.3.5"
 
         vectorDrawables {
             useSupportLibrary = true

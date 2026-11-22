@@ -1,6 +1,6 @@
 {
-  "versionCode": 9,
-  "versionName": "1.3.4",
+  "versionCode": 10,
+  "versionName": "1.3.5",
   "apkUrl": "https://raw.githubusercontent.com/pagerek/mojetelka/main/WebshareTV.apk",
-  "changelog": "Ikony v horním menu, návrat fokusu na aktivní kartu, zbývající čas na ose, sjednocená tlačítka a auto-play dalšího dílu v přehrávači, kompaktní info lišta a čistší texty"
+  "changelog": "Vycentrované horní menu, spolehlivý návrat fokusu na aktivní kartu, oprava velikosti souboru a odstranění duplicitních štítků v přehrávači, čistý katalog bez duplicitního názvu"
 }
