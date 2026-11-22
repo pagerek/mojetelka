@@ -84,14 +84,6 @@ fun TopNavigationBar(
         modifier = Modifier
             .fillMaxWidth()
             .height(58.dp)
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xF50A0A0A),
-                        Color(0xCC0A0A0A)
-                    )
-                )
-            )
             .padding(horizontal = 32.dp)
     ) {
         // Minimalist Brand Icon on the left: Black fill, Red border, Red W

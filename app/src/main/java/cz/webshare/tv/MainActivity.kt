@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -157,12 +158,12 @@ fun WebshareTvApp(viewModel: MainViewModel) {
             else -> {
                 val settingsLeftFocusRequester = remember { FocusRequester() }
                 val targetTint = when (state.activeTab) {
-                    NavTab.HOME -> Color(0xFF210A0E)      // Subtle crimson
-                    NavTab.MOVIES -> Color(0xFF0A1426)    // Subtle deep blue
-                    NavTab.SERIES -> Color(0xFF091C18)    // Subtle emerald teal
-                    NavTab.SEARCH -> Color(0xFF180D24)    // Subtle violet
-                    NavTab.MY_LIST -> Color(0xFF1E1508)   // Subtle warm amber
-                    NavTab.SETTINGS -> Color(0xFF11161F)  // Subtle cool slate
+                    NavTab.HOME -> Color(0xFF280B10)      // Subtle crimson
+                    NavTab.MOVIES -> Color(0xFF0A2347)    // Rich sapphire blue
+                    NavTab.SERIES -> Color(0xFF09211C)    // Deep emerald teal
+                    NavTab.SEARCH -> Color(0xFF1E0F2E)    // Deep violet
+                    NavTab.MY_LIST -> Color(0xFF261A09)   // Warm amber
+                    NavTab.SETTINGS -> Color(0xFF17181C)  // Neutral cool charcoal
                 }
                 val animatedTint by animateColorAsState(
                     targetValue = targetTint,
@@ -190,12 +191,15 @@ fun WebshareTvApp(viewModel: MainViewModel) {
                         settingsLeftFocusRequester = settingsLeftFocusRequester
                     )
 
-                    Box(
+                    Crossfade(
+                        targetState = state.activeTab,
+                        animationSpec = tween(durationMillis = 220),
+                        label = "tab_content_crossfade",
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxSize()
-                    ) {
-                        when (state.activeTab) {
+                    ) { activeTab ->
+                        when (activeTab) {
                             NavTab.HOME -> {
                                 HomeCatalogScreen(
                                     sections = state.sections,
