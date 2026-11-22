@@ -620,8 +620,13 @@ fun VideoPlayerScreen(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            val streamMeta = listOfNotNull(
+                                session.activeStream.language.badge,
+                                session.activeStream.quality.badge,
+                                session.activeStream.file.formattedSize.takeIf { it.isNotEmpty() }
+                            ).joinToString(" • ")
                             Text(
-                                text = "${session.activeStream.language.badge} • ${session.activeStream.quality.badge} • ${session.activeStream.file.formattedSize}",
+                                text = streamMeta,
                                 color = TvColors.TextSecondary,
                                 fontSize = 12.sp,
                                 maxLines = 1,
@@ -630,12 +635,20 @@ fun VideoPlayerScreen(
                         }
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        session.activeStream.techBadges.forEach { badge ->
-                            TechBadgePill(
-                                text = badge,
-                                backgroundColor = Color(0xDD1E2233)
-                            )
+                    val extraBadges = buildList {
+                        if (session.activeStream.isDolbyVision) add("Dolby Vision")
+                        else if (session.activeStream.isHdr) add("HDR")
+                        if (session.activeStream.isHevc) add("HEVC")
+                        if (session.activeStream.isSurround51) add("5.1")
+                    }
+                    if (extraBadges.isNotEmpty()) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            extraBadges.forEach { badge ->
+                                TechBadgePill(
+                                    text = badge,
+                                    backgroundColor = Color(0xDD1E2233)
+                                )
+                            }
                         }
                     }
                 }

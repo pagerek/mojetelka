@@ -97,6 +97,7 @@ fun SettingsScreen(
     leftMenuFocusRequester: FocusRequester = remember { FocusRequester() }
 ) {
     var selectedCategory by remember { mutableStateOf(SettingsCategory.PLAYBACK) }
+    var isLeftRailFocused by remember { mutableStateOf(false) }
     var tmdbInput by remember(preferences.tmdbApiKey) { mutableStateOf(preferences.tmdbApiKey) }
 
     val qualityFallbackChain = VideoQuality.fallbackOrderFor(preferences.preferredQuality)
@@ -117,10 +118,7 @@ fun SettingsScreen(
                 .width(250.dp)
                 .fillMaxHeight()
                 .padding(end = 20.dp)
-                .focusGroup()
-                .focusProperties {
-                    enter = { leftMenuFocusRequester }
-                },
+                .onFocusChanged { isLeftRailFocused = it.hasFocus },
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
@@ -144,10 +142,12 @@ fun SettingsScreen(
                     subtitle = summary,
                     icon = category.icon,
                     isSelected = selectedCategory == category,
-                    modifier = if (selectedCategory == category) {
+                    modifier = (if (selectedCategory == category) {
                         Modifier.focusRequester(leftMenuFocusRequester)
                     } else {
                         Modifier
+                    }).focusProperties {
+                        canFocus = isLeftRailFocused || selectedCategory == category
                     },
                     onSelect = { selectedCategory = category }
                 )

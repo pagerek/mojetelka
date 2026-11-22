@@ -94,6 +94,7 @@ class PreferencesStore(context: Context) {
                         backdropUrl = obj.optString("backdropUrl").takeIf { it.isNotEmpty() },
                         ident = obj.optString("ident"),
                         streamFileName = obj.optString("streamFileName"),
+                        sizeBytes = obj.optLong("sizeBytes", 0L),
                         positionMs = obj.optLong("positionMs", 0L),
                         durationMs = obj.optLong("durationMs", 0L),
                         seasonNumber = obj.optInt("seasonNumber", -1).takeIf { it > 0 },
@@ -148,6 +149,7 @@ class PreferencesStore(context: Context) {
                     if (w.backdropUrl != null) put("backdropUrl", w.backdropUrl)
                     put("ident", w.ident)
                     put("streamFileName", w.streamFileName)
+                    put("sizeBytes", w.sizeBytes)
                     put("positionMs", w.positionMs)
                     put("durationMs", w.durationMs)
                     if (w.seasonNumber != null) put("seasonNumber", w.seasonNumber)

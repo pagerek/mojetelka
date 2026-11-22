@@ -29,7 +29,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -37,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -70,12 +74,13 @@ fun TopNavigationBar(
     val tabFocusRequesters = remember {
         NavTab.entries.associateWith { FocusRequester() }
     }
+    var isNavBarFocused by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         runCatching { tabFocusRequesters[NavTab.HOME]?.requestFocus() }
     }
 
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(58.dp)
@@ -87,17 +92,32 @@ fun TopNavigationBar(
                     )
                 )
             )
-            .padding(horizontal = 32.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(horizontal = 32.dp)
     ) {
+        // Minimalist Brand Icon on the left: Black fill, Red border, Red W
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .size(32.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color(0xFF0A0A0A))
+                .border(1.8.dp, TvColors.NetflixRed, RoundedCornerShape(6.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "W",
+                color = TvColors.NetflixRed,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Black,
+                maxLines = 1
+            )
+        }
+
+        // Centered Navigation Menu
         Row(
             modifier = Modifier
-                .weight(1f)
-                .focusGroup()
-                .focusProperties {
-                    enter = { tabFocusRequesters[activeTab] ?: FocusRequester.Default }
-                }
+                .align(Alignment.Center)
+                .onFocusChanged { isNavBarFocused = it.hasFocus }
                 .onPreviewKeyEvent { event ->
                     if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
                         event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
@@ -113,33 +133,14 @@ fun TopNavigationBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Minimalist Brand Icon: Black fill, Red border, Red W
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Color(0xFF0A0A0A))
-                    .border(1.8.dp, TvColors.NetflixRed, RoundedCornerShape(6.dp))
-                    .padding(end = 0.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "W",
-                    color = TvColors.NetflixRed,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Black,
-                    maxLines = 1
-                )
-            }
-
-            Spacer(modifier = Modifier.width(6.dp))
-
             NavTab.entries.forEach { tab ->
                 val requester = tabFocusRequesters[tab]
-                val tabModifier = if (requester != null) {
+                val tabModifier = (if (requester != null) {
                     Modifier.focusRequester(requester)
                 } else {
                     Modifier
+                }).focusProperties {
+                    canFocus = isNavBarFocused || tab == activeTab
                 }
                 val tabIcon = when (tab) {
                     NavTab.HOME -> Icons.Rounded.Home
@@ -157,24 +158,38 @@ fun TopNavigationBar(
             }
         }
 
-        // Minimalist status indicators on the right (no distracting heavy borders)
+        // Ultra-minimalist status text on the right (no heavy pill boxes or borders)
         Row(
+            modifier = Modifier.align(Alignment.CenterEnd),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            TechBadgePill(
-                text = "${preferences.preferredLanguage.badge} • ${preferences.preferredQuality.badge}",
-                backgroundColor = Color(0xFF161616),
-                textColor = Color(0xFFB3B3B3),
-                borderColor = Color(0x18FFFFFF)
+            Text(
+                text = "${preferences.preferredQuality.badge} · ${preferences.preferredLanguage.badge}",
+                color = TvColors.TextMuted,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1
             )
             if (userProfile != null) {
-                TechBadgePill(
-                    text = if (userProfile.isVip) "VIP • ${userProfile.vipDaysLeft}d" else userProfile.username,
-                    backgroundColor = if (userProfile.isVip) Color(0x1F46D369) else Color(0x1FF5C518),
-                    textColor = if (userProfile.isVip) TvColors.VipGreen else TvColors.AccentGold,
-                    borderColor = if (userProfile.isVip) Color(0x3346D369) else Color(0x33F5C518)
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(if (userProfile.isVip) TvColors.VipGreen else TvColors.AccentGold)
+                    )
+                    Text(
+                        text = if (userProfile.isVip) "${userProfile.vipDaysLeft}d" else userProfile.username,
+                        color = TvColors.TextSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                }
             }
         }
     }
@@ -186,7 +201,6 @@ fun HomeCatalogScreen(
     watchHistory: List<WatchProgressItem>,
     filterType: MediaType?,
     isLoading: Boolean,
-    focusedItem: CatalogItem? = null,
     onFocusItem: (CatalogItem) -> Unit,
     onOpenDetail: (CatalogItem) -> Unit,
     onResumeHistory: (WatchProgressItem) -> Unit,
@@ -227,56 +241,10 @@ fun HomeCatalogScreen(
                 }
             }
         } else {
-            Column(modifier = Modifier.fillMaxSize()) {
-                val activePreview = focusedItem?.takeIf { filterType == null || it.type == filterType }
-                if (activePreview != null) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 32.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(
-                            text = activePreview.title,
-                            color = Color.White,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1
-                        )
-                        val meta = buildList {
-                            if (activePreview.displayYear.isNotEmpty()) add(activePreview.displayYear)
-                            add(if (activePreview.type == MediaType.SERIES) "Seriál" else "Film")
-                            if (activePreview.genres.isNotEmpty()) {
-                                add(activePreview.genres.take(2).joinToString(", "))
-                            }
-                        }.joinToString(" • ")
-                        if (meta.isNotEmpty()) {
-                            Text(
-                                text = meta,
-                                color = TvColors.TextSecondary,
-                                fontSize = 12.sp,
-                                maxLines = 1
-                            )
-                        }
-                        activePreview.rating?.takeIf { it > 0.0 }?.let { r ->
-                            Text(
-                                text = "★ ${"%.1f".format(r)}",
-                                color = TvColors.AccentGold,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1
-                            )
-                        }
-                    }
-                }
-
-                LazyColumn(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxSize(),
-                    contentPadding = PaddingValues(top = 8.dp, bottom = 42.dp)
-                ) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(top = 12.dp, bottom = 42.dp)
+            ) {
                 // Continue Watching ("Pokračovat ve sledování")
                 val relevantHistory = if (filterType == null) {
                     watchHistory
@@ -366,7 +334,6 @@ fun HomeCatalogScreen(
             }
         }
     }
-}
 }
 
 @Composable

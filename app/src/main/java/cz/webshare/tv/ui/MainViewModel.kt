@@ -702,7 +702,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     file = cz.webshare.tv.model.WebshareFile(
                         ident = historyItem.ident,
                         name = historyItem.streamFileName,
-                        sizeBytes = 0L,
+                        sizeBytes = historyItem.sizeBytes,
                         posVotes = 0,
                         negVotes = 0,
                         passwordProtected = false
@@ -789,6 +789,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 backdropUrl = session.item.backdropUrl,
                 ident = session.activeStream.file.ident,
                 streamFileName = session.activeStream.file.name,
+                sizeBytes = session.activeStream.file.sizeBytes,
                 positionMs = positionMs,
                 durationMs = durationMs,
                 seasonNumber = session.episode?.seasonNumber,

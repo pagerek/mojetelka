@@ -144,6 +144,7 @@ data class WebshareFile(
 ) {
     val formattedSize: String
         get() {
+            if (sizeBytes <= 0L) return ""
             val gb = sizeBytes.toDouble() / (1024.0 * 1024.0 * 1024.0)
             return if (gb >= 1.0) {
                 String.format("%.2f GB", gb)
@@ -174,7 +175,7 @@ data class ParsedStream(
             else if (isHdr) add("HDR")
             if (isHevc) add("HEVC")
             if (isSurround51) add("5.1")
-            add(file.formattedSize)
+            if (file.sizeBytes > 0L) add(file.formattedSize)
         }
 }
 
@@ -216,6 +217,7 @@ data class WatchProgressItem(
     val backdropUrl: String?,
     val ident: String,
     val streamFileName: String,
+    val sizeBytes: Long = 0L,
     val positionMs: Long,
     val durationMs: Long,
     val seasonNumber: Int? = null,
