@@ -6,6 +6,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +21,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import cz.webshare.tv.model.MediaDetails
 import cz.webshare.tv.model.MediaType
 import cz.webshare.tv.ui.MainViewModel
@@ -149,10 +153,35 @@ fun WebshareTvApp(viewModel: MainViewModel) {
                 )
             }
 
-            // 4. Main Netflix-style Shell with Top Navigation
+            // 4. Main Netflix-style Shell with Top Navigation & subtle per-tab ambient gradient
             else -> {
                 val settingsLeftFocusRequester = remember { FocusRequester() }
-                Column(modifier = Modifier.fillMaxSize()) {
+                val targetTint = when (state.activeTab) {
+                    NavTab.HOME -> Color(0xFF210A0E)      // Subtle crimson
+                    NavTab.MOVIES -> Color(0xFF0A1426)    // Subtle deep blue
+                    NavTab.SERIES -> Color(0xFF091C18)    // Subtle emerald teal
+                    NavTab.SEARCH -> Color(0xFF180D24)    // Subtle violet
+                    NavTab.MY_LIST -> Color(0xFF1E1508)   // Subtle warm amber
+                    NavTab.SETTINGS -> Color(0xFF11161F)  // Subtle cool slate
+                }
+                val animatedTint by animateColorAsState(
+                    targetValue = targetTint,
+                    animationSpec = tween(durationMillis = 350),
+                    label = "tab_bg_tint"
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    animatedTint,
+                                    TvColors.Background,
+                                    TvColors.Background
+                                )
+                            )
+                        )
+                ) {
                     TopNavigationBar(
                         activeTab = state.activeTab,
                         userProfile = state.userProfile,

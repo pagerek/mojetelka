@@ -389,29 +389,26 @@ fun SettingsScreen(
                                         )
                                     }
 
-                                    if (isUpdatingApp) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                        ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        if (isUpdatingApp) {
                                             CircularProgressIndicator(
                                                 color = TvColors.NetflixRed,
-                                                modifier = Modifier.size(24.dp),
-                                                strokeWidth = 2.5.dp
-                                            )
-                                            Text(
-                                                text = if (updateProgressPercent > 0) "$updateProgressPercent %" else "Kontroluji...",
-                                                color = Color.White,
-                                                fontSize = 13.sp,
-                                                fontWeight = FontWeight.SemiBold
+                                                modifier = Modifier.size(20.dp),
+                                                strokeWidth = 2.dp
                                             )
                                         }
-                                    } else {
                                         TvButton(
-                                            text = "Zkontrolovat aktualizace",
-                                            icon = Icons.Default.Refresh,
+                                            text = when {
+                                                isUpdatingApp && updateProgressPercent > 0 -> "Stahuji $updateProgressPercent %"
+                                                isUpdatingApp -> "Kontroluji..."
+                                                else -> "Zkontrolovat aktualizace"
+                                            },
+                                            icon = if (isUpdatingApp) null else Icons.Default.Refresh,
                                             isPrimary = true,
-                                            onClick = onCheckGitUpdate
+                                            onClick = { if (!isUpdatingApp) onCheckGitUpdate() }
                                         )
                                     }
                                 }

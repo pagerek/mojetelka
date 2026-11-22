@@ -221,9 +221,7 @@ fun HomeCatalogScreen(
     }
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(TvColors.Background)
+        modifier = Modifier.fillMaxSize()
     ) {
         if (isLoading && filteredSections.isEmpty()) {
             Box(

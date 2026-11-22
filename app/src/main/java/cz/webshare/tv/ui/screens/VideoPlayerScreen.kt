@@ -130,17 +130,6 @@ fun VideoPlayerScreen(
 
     val anyModalOpen = showAudioTrackModal || showSubtitleTrackModal || showQualityModal
 
-    // Intercept Back button inside player so modals / OSD close first before exiting playback
-    BackHandler(enabled = true) {
-        when {
-            showQualityModal -> showQualityModal = false
-            showAudioTrackModal -> showAudioTrackModal = false
-            showSubtitleTrackModal -> showSubtitleTrackModal = false
-            showControls -> showControls = false
-            else -> onBack()
-        }
-    }
-
     val exoPlayer = remember {
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
@@ -157,6 +146,20 @@ fun VideoPlayerScreen(
             .apply {
                 playWhenReady = true
             }
+    }
+
+    // Intercept Back button inside player: close open modal first, otherwise stop playback & exit
+    BackHandler(enabled = true) {
+        when {
+            showQualityModal -> showQualityModal = false
+            showAudioTrackModal -> showAudioTrackModal = false
+            showSubtitleTrackModal -> showSubtitleTrackModal = false
+            else -> {
+                exoPlayer.pause()
+                exoPlayer.stop()
+                onBack()
+            }
+        }
     }
 
     // Load or switch stream URL when session.directVideoUrl changes
@@ -359,11 +362,9 @@ fun VideoPlayerScreen(
                                 showSubtitleTrackModal = false
                                 true
                             }
-                            showControls -> {
-                                showControls = false
-                                true
-                            }
                             else -> {
+                                exoPlayer.pause()
+                                exoPlayer.stop()
                                 onBack()
                                 true
                             }
