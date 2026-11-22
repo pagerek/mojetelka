@@ -1,6 +1,6 @@
 {
-  "versionCode": 8,
-  "versionName": "1.3.3",
+  "versionCode": 9,
+  "versionName": "1.3.4",
   "apkUrl": "https://raw.githubusercontent.com/pagerek/mojetelka/main/WebshareTV.apk",
-  "changelog": "Vestavěný TMDB API klíč (CZ katalog), sjednocená časová osa s Play/Pause, oprava OK v přehrávači, vylepšená TV navigace"
+  "changelog": "Ikony v horním menu, návrat fokusu na aktivní kartu, zbývající čas na ose, sjednocená tlačítka a auto-play dalšího dílu v přehrávači, kompaktní info lišta a čistší texty"
 }

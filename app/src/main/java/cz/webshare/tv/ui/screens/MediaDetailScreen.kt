@@ -20,7 +20,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
@@ -154,7 +154,7 @@ fun MediaDetailScreen(
                 ) {
                     TvButton(
                         text = "Zpět",
-                        icon = Icons.Default.ArrowBack,
+                        icon = Icons.AutoMirrored.Filled.ArrowBack,
                         paddingValues = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                         onClick = onBack
                     )
@@ -381,7 +381,7 @@ fun MediaDetailScreen(
                 if (streamResolution != null && streamResolution.groups.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(22.dp))
                     Text(
-                        text = "Dostupné skupiny kvality a jazyka na Webshare.cz (kliknutím rovnou spustíš):",
+                        text = "Dostupné verze",
                         color = TvColors.TextSecondary,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold

@@ -71,30 +71,31 @@ fun LoginScreen(
     ) {
         Column(
             modifier = Modifier
-                .width(500.dp)
+                .width(460.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xF2141414))
-                .border(1.dp, Color(0x26FFFFFF), RoundedCornerShape(10.dp))
-                .padding(horizontal = 40.dp, vertical = 36.dp),
+                .background(TvColors.SurfaceCard)
+                .border(1.dp, TvColors.BorderSubtle, RoundedCornerShape(10.dp))
+                .padding(horizontal = 36.dp, vertical = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // App Logo Badge
+            // Minimalist Brand Icon matching TopNavigationBar: Black fill, Red border, Red W
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
                 Box(
                     modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(TvColors.NetflixRed),
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF0A0A0A))
+                        .border(2.dp, TvColors.NetflixRed, RoundedCornerShape(8.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "W",
-                        color = Color.White,
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.ExtraBold
+                        color = TvColors.NetflixRed,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Black
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -102,24 +103,24 @@ fun LoginScreen(
                     Text(
                         text = "WEBSHARE TV",
                         color = Color.White,
-                        fontSize = 24.sp,
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 1.5.sp
+                        letterSpacing = 1.4.sp
                     )
                     Text(
-                        text = "Filmová a seriálová knihovna pro VIP účet",
+                        text = "Přihlášení k VIP účtu",
                         color = TvColors.TextSecondary,
                         fontSize = 12.sp
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(26.dp))
 
             OutlinedTextField(
                 value = username,
                 onValueChange = { username = it },
-                label = { Text("Uživatelské jméno nebo e-mail (Webshare.cz)") },
+                label = { Text("Uživatelské jméno nebo e-mail") },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Person,
@@ -149,7 +150,7 @@ fun LoginScreen(
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
-                label = { Text("Heslo k Webshare.cz") },
+                label = { Text("Heslo") },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Lock,
@@ -212,27 +213,20 @@ fun LoginScreen(
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "Ověřuji VIP účet na Webshare.cz...",
+                        text = "Ověřuji účet...",
                         color = Color.White,
                         fontSize = 14.sp
                     )
                 }
             } else {
                 TvButton(
-                    text = "Přihlásit se k Webshare VIP",
+                    text = "Přihlásit se",
                     icon = Icons.Default.PlayArrow,
                     isPrimary = true,
                     onClick = { onLoginSubmit(username, password) },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Heslo je šifrováno protokolem MD5-Crypt + SHA-1 přímo proti api/login Webshare.cz.",
-                color = TvColors.TextMuted,
-                fontSize = 11.sp
-            )
         }
     }
 }

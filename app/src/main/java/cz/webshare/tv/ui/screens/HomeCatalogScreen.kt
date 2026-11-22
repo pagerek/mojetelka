@@ -3,6 +3,7 @@ package cz.webshare.tv.ui.screens
 import android.view.KeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -89,6 +94,7 @@ fun TopNavigationBar(
         Row(
             modifier = Modifier
                 .weight(1f)
+                .focusGroup()
                 .focusProperties {
                     enter = { tabFocusRequesters[activeTab] ?: FocusRequester.Default }
                 }
@@ -135,8 +141,15 @@ fun TopNavigationBar(
                 } else {
                     Modifier
                 }
+                val tabIcon = when (tab) {
+                    NavTab.HOME -> Icons.Rounded.Home
+                    NavTab.SEARCH -> Icons.Rounded.Search
+                    NavTab.SETTINGS -> Icons.Rounded.Settings
+                    else -> null
+                }
                 TvNavTabItem(
                     text = tab.labelCz,
+                    icon = tabIcon,
                     isSelected = activeTab == tab,
                     onClick = { onSelectTab(tab) },
                     modifier = tabModifier
@@ -170,15 +183,12 @@ fun TopNavigationBar(
 @Composable
 fun HomeCatalogScreen(
     sections: List<CatalogSection>,
-    heroItem: CatalogItem?,
     watchHistory: List<WatchProgressItem>,
-    myList: List<CatalogItem> = emptyList(),
     filterType: MediaType?,
     isLoading: Boolean,
+    focusedItem: CatalogItem? = null,
     onFocusItem: (CatalogItem) -> Unit,
     onOpenDetail: (CatalogItem) -> Unit,
-    onQuickPlayHero: (CatalogItem) -> Unit = { onOpenDetail(it) },
-    onToggleMyList: (CatalogItem) -> Unit = {},
     onResumeHistory: (WatchProgressItem) -> Unit,
     onRestartHistoryFromBeginning: (WatchProgressItem) -> Unit = {},
     onMarkHistoryWatched: (WatchProgressItem) -> Unit = {},
@@ -217,10 +227,56 @@ fun HomeCatalogScreen(
                 }
             }
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = 12.dp, bottom = 42.dp)
-            ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                val activePreview = focusedItem?.takeIf { filterType == null || it.type == filterType }
+                if (activePreview != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 32.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = activePreview.title,
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                        val meta = buildList {
+                            if (activePreview.displayYear.isNotEmpty()) add(activePreview.displayYear)
+                            add(if (activePreview.type == MediaType.SERIES) "Seriál" else "Film")
+                            if (activePreview.genres.isNotEmpty()) {
+                                add(activePreview.genres.take(2).joinToString(", "))
+                            }
+                        }.joinToString(" • ")
+                        if (meta.isNotEmpty()) {
+                            Text(
+                                text = meta,
+                                color = TvColors.TextSecondary,
+                                fontSize = 12.sp,
+                                maxLines = 1
+                            )
+                        }
+                        activePreview.rating?.takeIf { it > 0.0 }?.let { r ->
+                            Text(
+                                text = "★ ${"%.1f".format(r)}",
+                                color = TvColors.AccentGold,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxSize(),
+                    contentPadding = PaddingValues(top = 8.dp, bottom = 42.dp)
+                ) {
                 // Continue Watching ("Pokračovat ve sledování")
                 val relevantHistory = if (filterType == null) {
                     watchHistory
@@ -310,6 +366,7 @@ fun HomeCatalogScreen(
             }
         }
     }
+}
 }
 
 @Composable

@@ -27,7 +27,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Backspace
+import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SpaceBar
@@ -147,7 +147,7 @@ fun SearchScreen(
                 )
                 TvKeyboardKey(
                     label = "Smazat",
-                    icon = Icons.Default.Backspace,
+                    icon = Icons.AutoMirrored.Filled.Backspace,
                     modifier = Modifier.weight(1.1f),
                     height = 38.dp,
                     onClick = {
@@ -290,7 +290,7 @@ fun SearchScreen(
                     Spacer(modifier = Modifier.width(12.dp))
                     if (query.isEmpty()) {
                         Text(
-                            text = "Vyber písmena na klávesnici vlevo nebo rychlý tip níže...",
+                            text = "Hledat film nebo seriál...",
                             color = TvColors.TextSecondary,
                             fontSize = 15.sp,
                             maxLines = 1,
@@ -389,9 +389,10 @@ fun SearchScreen(
 
                 results.isNotEmpty() -> {
                     Text(
-                        text = "Nalezené tituly (${results.size}) – po rozkliknutí si zvolíš kvalitu (4K / 1080p / 720p) a jazyk (CZ / EN):",
+                        text = "Výsledky (${results.size})",
                         color = TvColors.TextSecondary,
                         fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(bottom = 10.dp)
                     )
 
@@ -433,7 +434,7 @@ fun SearchScreen(
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Výsledky se automaticky zobrazují vpravo bez překrývání obrazovky systémovou klávesnicí.",
+                                text = "Výsledky se zobrazují okamžitě.",
                                 color = TvColors.TextSecondary,
                                 fontSize = 13.sp
                             )

@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,8 +25,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.MovieFilter
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
@@ -42,9 +43,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -74,6 +77,7 @@ private enum class SettingsCategory(
     UPDATES("Aktualizace", Icons.Default.SystemUpdate)
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun SettingsScreen(
     preferences: UserPreferences,
@@ -112,7 +116,11 @@ fun SettingsScreen(
             modifier = Modifier
                 .width(250.dp)
                 .fillMaxHeight()
-                .padding(end = 20.dp),
+                .padding(end = 20.dp)
+                .focusGroup()
+                .focusProperties {
+                    enter = { leftMenuFocusRequester }
+                },
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
@@ -251,8 +259,8 @@ fun SettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(10.dp))
-                                    .background(Color(0xFF14161D))
-                                    .border(1.dp, Color(0x1FFFFFFF), RoundedCornerShape(10.dp))
+                                    .background(TvColors.SurfaceCard)
+                                    .border(1.dp, TvColors.BorderSubtle, RoundedCornerShape(10.dp))
                                     .padding(horizontal = 22.dp, vertical = 20.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
@@ -285,7 +293,7 @@ fun SettingsScreen(
 
                                 TvButton(
                                     text = "Odhlásit účet",
-                                    icon = Icons.Default.ExitToApp,
+                                    icon = Icons.AutoMirrored.Filled.ExitToApp,
                                     onClick = onLogout
                                 )
                             }
@@ -303,8 +311,8 @@ fun SettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(10.dp))
-                                    .background(Color(0xFF14161D))
-                                    .border(1.dp, Color(0x1FFFFFFF), RoundedCornerShape(10.dp))
+                                    .background(TvColors.SurfaceCard)
+                                    .border(1.dp, TvColors.BorderSubtle, RoundedCornerShape(10.dp))
                                     .padding(20.dp),
                                 verticalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
@@ -347,8 +355,8 @@ fun SettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(10.dp))
-                                    .background(Color(0xFF14161D))
-                                    .border(1.dp, Color(0x1FFFFFFF), RoundedCornerShape(10.dp))
+                                    .background(TvColors.SurfaceCard)
+                                    .border(1.dp, TvColors.BorderSubtle, RoundedCornerShape(10.dp))
                                     .padding(22.dp),
                                 verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
@@ -587,7 +595,7 @@ private fun SettingsOptionTile(
         targetValue = when {
             isFocused -> Color.White
             isSelected -> Color(0x24E50914)
-            else -> Color(0xFF14161D)
+            else -> TvColors.SurfaceCard
         },
         animationSpec = tween(110),
         label = "tile_bg"
@@ -596,7 +604,7 @@ private fun SettingsOptionTile(
     val borderColor = when {
         isFocused -> Color.White
         isSelected -> TvColors.NetflixRed
-        else -> Color(0x1EFFFFFF)
+        else -> TvColors.BorderSubtle
     }
 
     val titleColor = when {

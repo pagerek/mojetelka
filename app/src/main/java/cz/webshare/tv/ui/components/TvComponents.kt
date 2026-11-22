@@ -70,7 +70,9 @@ import kotlinx.coroutines.delay
 object TvColors {
     val Background = Color(0xFF0A0A0A)
     val SurfaceDark = Color(0xFF141414)
+    val SurfaceCard = Color(0xFF14161D)
     val SurfaceElevated = Color(0xFF1F1F1F)
+    val BorderSubtle = Color(0x1EFFFFFF)
     val NetflixRed = Color(0xFFE50914)
     val NetflixRedDark = Color(0xFFB81D24)
     val AccentGold = Color(0xFFF5C518)
@@ -196,7 +198,8 @@ fun TvNavTabItem(
     text: String,
     isSelected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
@@ -236,17 +239,26 @@ fun TvNavTabItem(
             modifier = Modifier
                 .clip(RoundedCornerShape(6.dp))
                 .background(bgColor)
-                .padding(horizontal = 14.dp, vertical = 6.dp),
+                .padding(horizontal = if (icon != null) 12.dp else 14.dp, vertical = 6.dp),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = text,
-                color = textColor,
-                fontSize = 14.sp,
-                fontWeight = if (isFocused || isSelected) FontWeight.Bold else FontWeight.Medium,
-                maxLines = 1,
-                softWrap = false
-            )
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = text,
+                    tint = textColor,
+                    modifier = Modifier.size(20.dp)
+                )
+            } else {
+                Text(
+                    text = text,
+                    color = textColor,
+                    fontSize = 14.sp,
+                    fontWeight = if (isFocused || isSelected) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
         }
         Spacer(modifier = Modifier.height(3.dp))
         Box(
@@ -605,18 +617,18 @@ fun TvContinueWatchingCard(
                     )
             )
 
-            // Subtle top-right hint when focused that holding OK opens popover
-            if ((isFocused || showPopoverMenu) && hasPopoverActions) {
+            // Show active indicator only while the options popover is open
+            if (showPopoverMenu && hasPopoverActions) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(6.dp)
                         .clip(RoundedCornerShape(4.dp))
-                        .background(if (showPopoverMenu) TvColors.NetflixRed else Color(0xCC0A0A0A))
+                        .background(TvColors.NetflixRed)
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = if (showPopoverMenu) "Možnosti ▾" else "Podrž OK: Možnosti",
+                        text = "Možnosti ▾",
                         color = Color.White,
                         fontSize = 8.sp,
                         fontWeight = FontWeight.SemiBold,

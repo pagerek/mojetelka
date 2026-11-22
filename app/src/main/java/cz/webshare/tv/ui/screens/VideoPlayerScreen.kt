@@ -25,13 +25,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Subtitles
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -120,6 +121,10 @@ fun VideoPlayerScreen(
     var isTimelineFocused by remember { mutableStateOf(false) }
     var seekFeedbackText by remember { mutableStateOf<String?>(null) }
 
+    var upNextDismissed by remember(session.episode?.code) { mutableStateOf(false) }
+    var upNextTriggered by remember(session.episode?.code) { mutableStateOf(false) }
+    var playbackEnded by remember(session.episode?.code) { mutableStateOf(false) }
+
     val rootFocusRequester = remember { FocusRequester() }
     val timelineFocusRequester = remember { FocusRequester() }
 
@@ -196,6 +201,9 @@ fun VideoPlayerScreen(
                 isBuffering = playbackState == Player.STATE_BUFFERING
                 if (playbackState == Player.STATE_READY) {
                     durationMs = exoPlayer.duration.coerceAtLeast(0L)
+                    playbackEnded = false
+                } else if (playbackState == Player.STATE_ENDED) {
+                    playbackEnded = true
                 }
             }
 
@@ -282,6 +290,14 @@ fun VideoPlayerScreen(
                 (System.currentTimeMillis() - lastInteractionTime) > 6_000L
             ) {
                 showControls = false
+            }
+
+            if (session.nextEpisode != null && !upNextDismissed && !upNextTriggered && !modalOpen) {
+                val remMs = if (durationMs > 0L) (durationMs - currentPosMs).coerceAtLeast(0L) else Long.MAX_VALUE
+                if ((playbackEnded || (durationMs > 30_000L && remMs <= 1_000L))) {
+                    upNextTriggered = true
+                    onNextEpisode()
+                }
             }
         }
     }
@@ -584,10 +600,10 @@ fun VideoPlayerScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        TvButton(
-                            text = "Ukončit přehrávání",
-                            icon = Icons.Default.ArrowBack,
-                            paddingValues = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                        TvIconButton(
+                            icon = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Ukončit přehrávání",
+                            size = 38.dp,
                             onClick = onBack
                         )
                         Column(modifier = Modifier.weight(1f)) {
@@ -605,7 +621,7 @@ fun VideoPlayerScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = session.activeStream.file.name,
+                                text = "${session.activeStream.language.badge} • ${session.activeStream.quality.badge} • ${session.activeStream.file.formattedSize}",
                                 color = TvColors.TextSecondary,
                                 fontSize = 12.sp,
                                 maxLines = 1,
@@ -638,7 +654,7 @@ fun VideoPlayerScreen(
                     ) {
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             TvIconButton(
-                                icon = Icons.Default.VolumeUp,
+                                icon = Icons.AutoMirrored.Filled.VolumeUp,
                                 contentDescription = "Zvuk",
                                 size = 38.dp,
                                 onClick = { showAudioTrackModal = true }
@@ -652,9 +668,10 @@ fun VideoPlayerScreen(
                             )
 
                             if (session.resolutionResult != null && session.resolutionResult.groups.isNotEmpty()) {
-                                TvButton(
-                                    text = "Kvalita / Zdroj (${session.activeStream.quality.badge} • ${session.activeStream.language.badge})",
-                                    icon = Icons.Default.Settings,
+                                TvIconButton(
+                                    icon = Icons.Default.HighQuality,
+                                    contentDescription = "Kvalita / Zdroj (${session.activeStream.quality.badge} • ${session.activeStream.language.badge})",
+                                    size = 38.dp,
                                     onClick = { showQualityModal = true }
                                 )
                             }
@@ -728,13 +745,67 @@ fun VideoPlayerScreen(
                             )
                         }
 
+                        val remainingMs = (durationMs - currentPosMs).coerceAtLeast(0L)
                         Text(
-                            text = formatDurationMs(durationMs),
+                            text = if (durationMs > 0L) "-${formatDurationMs(remainingMs)}" else formatDurationMs(0L),
                             color = if (isTimelineFocused) Color(0xFFE5E5E5) else TvColors.TextSecondary,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium
                         )
                     }
+                }
+            }
+        }
+
+        // Up Next ("Další díl za X s") auto-play card near end of episode
+        val nextEp = session.nextEpisode
+        val upNextRemainingSec = if (nextEp != null && durationMs > 30_000L) {
+            ((durationMs - currentPosMs).coerceAtLeast(0L) / 1000L).toInt()
+        } else Int.MAX_VALUE
+        if (nextEp != null && !upNextDismissed && !upNextTriggered && !anyModalOpen &&
+            (playbackEnded || upNextRemainingSec <= 15)
+        ) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 36.dp, bottom = 92.dp)
+                    .width(340.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(TvColors.SurfaceCard.copy(alpha = 0.94f))
+                    .border(1.dp, TvColors.BorderSubtle, RoundedCornerShape(10.dp))
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = if (playbackEnded || upNextRemainingSec <= 0) "Spouštím další díl..." else "Další díl za ${upNextRemainingSec} s",
+                    color = TvColors.AccentGold,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "${nextEp.code} – ${nextEp.title}",
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TvButton(
+                        text = "Přehrát hned",
+                        icon = Icons.Default.SkipNext,
+                        isPrimary = true,
+                        paddingValues = PaddingValues(horizontal = 14.dp, vertical = 7.dp),
+                        onClick = {
+                            upNextTriggered = true
+                            onNextEpisode()
+                        }
+                    )
+                    TvButton(
+                        text = "Zrušit",
+                        paddingValues = PaddingValues(horizontal = 14.dp, vertical = 7.dp),
+                        onClick = { upNextDismissed = true }
+                    )
                 }
             }
         }
