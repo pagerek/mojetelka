@@ -998,6 +998,8 @@ fun TvIconButton(
         )
     } else null
 
+    val shape = if (borderlessInactive) RoundedCornerShape(50) else RoundedCornerShape(8.dp)
+
     Box(
         modifier = modifier
             .size(size)
@@ -1005,14 +1007,14 @@ fun TvIconButton(
                 scaleX = scale
                 scaleY = scale
             }
-            .clip(RoundedCornerShape(if (borderlessInactive) 50 else 8))
+            .clip(shape)
             .then(
                 if (fadeOutBrush != null) Modifier.background(fadeOutBrush)
                 else Modifier.background(bgColor)
             )
             .then(
                 if (borderWidth > 0.dp) {
-                    Modifier.border(borderWidth, borderColor, RoundedCornerShape(if (borderlessInactive) 50 else 8))
+                    Modifier.border(borderWidth, borderColor, shape)
                 } else {
                     Modifier
                 }

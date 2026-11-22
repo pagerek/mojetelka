@@ -1,6 +1,6 @@
 {
-  "versionCode": 15,
-  "versionName": "1.3.10",
+  "versionCode": 16,
+  "versionName": "1.3.11",
   "apkUrl": "https://raw.githubusercontent.com/pagerek/mojetelka/main/WebshareTV.apk",
-  "changelog": "Zachování pozice a výběru po návratu z detailu, oprava Anděla Páně i duplicitní kategorie Trendy, hodiny s časem konce v přehrávači a čistší tlačítka s bílou časovou osou"
+  "changelog": "Oprava přechodu fokusu z horního menu na obsah karet, opravená IMDb ID a TMDB plakáty pro Anděl Páně 2, S čerty nejsou žerty a další české filmy a seriály"
 }

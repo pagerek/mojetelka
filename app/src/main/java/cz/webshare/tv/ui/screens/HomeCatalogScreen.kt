@@ -86,7 +86,8 @@ fun TopNavigationBar(
     userProfile: WebshareUserProfile?,
     preferences: UserPreferences,
     onSelectTab: (NavTab) -> Unit,
-    settingsLeftFocusRequester: FocusRequester? = null
+    settingsLeftFocusRequester: FocusRequester? = null,
+    contentFocusRequester: FocusRequester? = null
 ) {
     val tabFocusRequesters = remember {
         NavTab.entries.associateWith { FocusRequester() }
@@ -129,12 +130,17 @@ fun TopNavigationBar(
                 .onFocusChanged { isNavBarFocused = it.hasFocus }
                 .onPreviewKeyEvent { event ->
                     if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
-                        event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
-                        activeTab == NavTab.SETTINGS &&
-                        settingsLeftFocusRequester != null
+                        event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_DOWN
                     ) {
-                        runCatching { settingsLeftFocusRequester.requestFocus() }
-                        true
+                        when {
+                            activeTab == NavTab.SETTINGS && settingsLeftFocusRequester != null -> {
+                                runCatching { settingsLeftFocusRequester.requestFocus(); true }.getOrDefault(false)
+                            }
+                            activeTab != NavTab.SEARCH && activeTab != NavTab.SETTINGS && contentFocusRequester != null -> {
+                                runCatching { contentFocusRequester.requestFocus(); true }.getOrDefault(false)
+                            }
+                            else -> false
+                        }
                     } else {
                         false
                     }
@@ -232,6 +238,7 @@ fun HomeCatalogScreen(
     filterType: MediaType?,
     isLoading: Boolean,
     showCategoryTiles: Boolean = false,
+    contentFocusRequester: FocusRequester? = null,
     onOpenCategory: (CatalogSection) -> Unit = {},
     onFocusItem: (CatalogItem) -> Unit,
     onOpenDetail: (CatalogItem) -> Unit,
@@ -275,23 +282,25 @@ fun HomeCatalogScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(top = 10.dp, bottom = 42.dp)
             ) {
-                // Netflix-style Glassmorphic Category Tiles at the top of Domů
-                if (showCategoryTiles && filteredSections.isNotEmpty()) {
-                    item(key = "category_tiles_row") {
-                        CategoryTilesRow(
-                            sections = filteredSections,
-                            onSelectCategory = onOpenCategory
-                        )
-                    }
-                }
-
-                // Continue Watching ("Pokračovat ve sledování")
+                val hasTiles = showCategoryTiles && filteredSections.isNotEmpty()
                 val relevantHistory = if (filterType == null) {
                     watchHistory
                 } else {
                     watchHistory.filter { it.mediaType == filterType }
                 }
 
+                // Netflix-style Glassmorphic Category Tiles at the top of Domů
+                if (hasTiles) {
+                    item(key = "category_tiles_row") {
+                        CategoryTilesRow(
+                            sections = filteredSections,
+                            firstTileFocusRequester = contentFocusRequester,
+                            onSelectCategory = onOpenCategory
+                        )
+                    }
+                }
+
+                // Continue Watching ("Pokračovat ve sledování")
                 if (relevantHistory.isNotEmpty()) {
                     item(key = "continue_watching") {
                         Column(
@@ -322,12 +331,18 @@ fun HomeCatalogScreen(
                                 contentPadding = PaddingValues(horizontal = 32.dp, vertical = 4.dp),
                                 horizontalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
-                                items(
+                                itemsIndexed(
                                     relevantHistory,
-                                    key = { "${it.mediaId}_${it.seasonNumber}_${it.episodeNumber}" }
-                                ) { hItem ->
+                                    key = { _, it -> "${it.mediaId}_${it.seasonNumber}_${it.episodeNumber}" }
+                                ) { hIdx, hItem ->
+                                    val cwMod = if (!hasTiles && hIdx == 0 && contentFocusRequester != null) {
+                                        Modifier.focusRequester(contentFocusRequester)
+                                    } else {
+                                        Modifier
+                                    }
                                     TvContinueWatchingCard(
                                         item = hItem,
+                                        modifier = cwMod,
                                         onClick = { onResumeHistory(hItem) },
                                         onPlayFromBeginning = { onRestartHistoryFromBeginning(hItem) },
                                         onMarkAsWatched = { onMarkHistoryWatched(hItem) },
@@ -341,7 +356,7 @@ fun HomeCatalogScreen(
                 }
 
                 // Horizontal Movie & Series Poster Rows
-                itemsIndexed(filteredSections, key = { _, sec -> sec.id }) { _, section ->
+                itemsIndexed(filteredSections, key = { _, sec -> sec.id }) { secIdx, section ->
                     Column(
                         modifier = Modifier
                             .tvBringIntoViewContainer(topPadding = 12.dp, bottomPadding = 24.dp)
@@ -361,8 +376,14 @@ fun HomeCatalogScreen(
                             val isRankedChart = section.id == "trending_movies" || section.id == "top_movies"
                             itemsIndexed(section.items, key = { _, item -> item.id }) { itemIdx, item ->
                                 val topRank = if (isRankedChart && itemIdx < 10) itemIdx + 1 else null
+                                val cardMod = if (!hasTiles && relevantHistory.isEmpty() && secIdx == 0 && itemIdx == 0 && contentFocusRequester != null) {
+                                    Modifier.focusRequester(contentFocusRequester)
+                                } else {
+                                    Modifier
+                                }
                                 TvPosterCard(
                                     item = item,
+                                    modifier = cardMod,
                                     rankNumber = topRank,
                                     onFocused = onFocusItem,
                                     onClick = onOpenDetail
@@ -380,6 +401,7 @@ fun HomeCatalogScreen(
 fun MyListScreen(
     myList: List<CatalogItem>,
     watchHistory: List<WatchProgressItem>,
+    contentFocusRequester: FocusRequester? = null,
     onFocusItem: (CatalogItem) -> Unit,
     onOpenDetail: (CatalogItem) -> Unit,
     onResumeHistory: (WatchProgressItem) -> Unit,
@@ -423,12 +445,18 @@ fun MyListScreen(
                             )
                         }
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            items(
+                            itemsIndexed(
                                 watchHistory,
-                                key = { "${it.mediaId}_${it.seasonNumber}_${it.episodeNumber}" }
-                            ) { hItem ->
+                                key = { _, it -> "${it.mediaId}_${it.seasonNumber}_${it.episodeNumber}" }
+                            ) { hIdx, hItem ->
+                                val cwMod = if (hIdx == 0 && contentFocusRequester != null) {
+                                    Modifier.focusRequester(contentFocusRequester)
+                                } else {
+                                    Modifier
+                                }
                                 TvContinueWatchingCard(
                                     item = hItem,
+                                    modifier = cwMod,
                                     onClick = { onResumeHistory(hItem) },
                                     onPlayFromBeginning = { onRestartHistoryFromBeginning(hItem) },
                                     onMarkAsWatched = { onMarkHistoryWatched(hItem) },
@@ -475,9 +503,15 @@ fun MyListScreen(
                             horizontalArrangement = Arrangement.spacedBy(14.dp),
                             contentPadding = PaddingValues(vertical = 6.dp)
                         ) {
-                            items(myList, key = { it.id }) { item ->
+                            itemsIndexed(myList, key = { _, it -> it.id }) { idx, item ->
+                                val cardMod = if (watchHistory.isEmpty() && idx == 0 && contentFocusRequester != null) {
+                                    Modifier.focusRequester(contentFocusRequester)
+                                } else {
+                                    Modifier
+                                }
                                 TvPosterCard(
                                     item = item,
+                                    modifier = cardMod,
                                     onFocused = onFocusItem,
                                     onClick = onOpenDetail
                                 )
@@ -493,6 +527,7 @@ fun MyListScreen(
 @Composable
 private fun CategoryTilesRow(
     sections: List<CatalogSection>,
+    firstTileFocusRequester: FocusRequester? = null,
     onSelectCategory: (CatalogSection) -> Unit
 ) {
     LazyRow(
@@ -503,9 +538,14 @@ private fun CategoryTilesRow(
         contentPadding = PaddingValues(horizontal = 32.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(sections, key = { "tile_${it.id}" }) { section ->
+        itemsIndexed(sections, key = { _, it -> "tile_${it.id}" }) { idx, section ->
             CategoryTileCard(
                 label = categoryTileShortLabel(section),
+                modifier = if (idx == 0 && firstTileFocusRequester != null) {
+                    Modifier.focusRequester(firstTileFocusRequester)
+                } else {
+                    Modifier
+                },
                 onClick = { onSelectCategory(section) }
             )
         }
@@ -515,6 +555,7 @@ private fun CategoryTilesRow(
 @Composable
 private fun CategoryTileCard(
     label: String,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     val focusRegistry = LocalFocusRestoreRegistry.current
@@ -540,7 +581,7 @@ private fun CategoryTileCard(
     }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .width(154.dp)
             .height(70.dp)
             .graphicsLayer {

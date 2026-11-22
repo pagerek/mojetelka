@@ -17,6 +17,7 @@ import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Result of a catalog search: deduplicated title cards + the raw Webshare files that were found,
@@ -37,6 +38,8 @@ class CatalogApi(
         private const val CINEMETA_BASE = "https://v3-cinemeta.strem.io"
     }
 
+    private val curatedTmdbCache = ConcurrentHashMap<String, CatalogItem>()
+
     /**
      * Loads the Netflix-style home sections.
      * Uses TMDB (cs-CZ) if an API key is provided, otherwise seamlessly combines
@@ -48,7 +51,11 @@ class CatalogApi(
             if (cleanKey.isNotEmpty()) {
                 val tmdbSections = runCatching { loadTmdbHomeSections(cleanKey) }.getOrNull()
                 if (!tmdbSections.isNullOrEmpty()) {
-                    return@withContext tmdbSections + listOf(czechAndSlovakHitsSection())
+                    val czSection = czechAndSlovakHitsSection()
+                    val enrichedCz = czSection.copy(
+                        items = enrichCuratedWithTmdb(czSection.items, cleanKey)
+                    )
+                    return@withContext tmdbSections + listOf(enrichedCz)
                 }
             }
             loadCinemetaHomeSections()
@@ -213,10 +220,8 @@ class CatalogApi(
             if (cleanKey.isNotEmpty()) {
                 val tmdbItem = if (item.tmdbId != null) {
                     item
-                } else if (!item.imdbId.isNullOrBlank() && item.imdbId.startsWith("tt")) {
-                    runCatching { findTmdbByImdbId(item, cleanKey) }.getOrNull()
                 } else {
-                    null
+                    runCatching { findOrSearchTmdbForItem(item, cleanKey) }.getOrNull()
                 }
                 if (tmdbItem?.tmdbId != null) {
                     runCatching { getTmdbDetails(tmdbItem, cleanKey) }.getOrNull()?.let { return@withContext it }
@@ -297,7 +302,7 @@ class CatalogApi(
             fetchTmdbList("$TMDB_BASE/movie/top_rated?language=cs-CZ&api_key=$apiKey", MediaType.MOVIE)
         }
 
-        val curatedChristmas = christmasMoviesSection().items
+        val curatedChristmas = enrichCuratedWithTmdb(christmasMoviesSection().items, apiKey)
         val tmdbChristmas = christmasDef.await()
         val combinedChristmas = mergeUniqueCatalogItems(curatedChristmas, tmdbChristmas)
 
@@ -351,12 +356,15 @@ class CatalogApi(
             )
         }
 
-        val animated = mergeUniqueCatalogItems(kidsCuratedAnimatedSection().items, animatedMoviesDef.await())
-        val series = mergeUniqueCatalogItems(kidsCuratedSeriesSection().items, kidsSeriesDef.await())
+        val curatedCzKids = enrichCuratedWithTmdb(kidsCuratedCzechSection().items, apiKey)
+        val curatedAnimated = enrichCuratedWithTmdb(kidsCuratedAnimatedSection().items, apiKey)
+        val curatedSeries = enrichCuratedWithTmdb(kidsCuratedSeriesSection().items, apiKey)
+        val animated = mergeUniqueCatalogItems(curatedAnimated, animatedMoviesDef.await())
+        val series = mergeUniqueCatalogItems(curatedSeries, kidsSeriesDef.await())
         val adventure = familyAdventureDef.await()
 
         buildList {
-            add(kidsCuratedCzechSection())
+            add(kidsCuratedCzechSection().copy(items = curatedCzKids))
             if (animated.isNotEmpty()) {
                 add(CatalogSection("kids_animated_movies", "Animované a rodinné filmy", animated))
             }
@@ -367,6 +375,44 @@ class CatalogApi(
                 add(CatalogSection("kids_adventure", "Dobrodružství a fantasy", adventure))
             }
         }
+    }
+
+    private suspend fun enrichCuratedWithTmdb(
+        items: List<CatalogItem>,
+        apiKey: String
+    ): List<CatalogItem> = coroutineScope {
+        items.map { item ->
+            async {
+                val cacheKey = "${apiKey.take(6)}_${item.id}"
+                curatedTmdbCache[cacheKey]?.let { return@async it }
+                val enriched = runCatching { findOrSearchTmdbForItem(item, apiKey) }.getOrNull() ?: item
+                curatedTmdbCache[cacheKey] = enriched
+                enriched
+            }
+        }.awaitAll()
+    }
+
+    private fun findOrSearchTmdbForItem(item: CatalogItem, apiKey: String): CatalogItem? {
+        if (item.tmdbId != null) return item
+        if (!item.imdbId.isNullOrBlank() && item.imdbId.startsWith("tt")) {
+            findTmdbByImdbId(item, apiKey)?.let { return it }
+        }
+        val endpoint = if (item.type == MediaType.SERIES) "tv" else "movie"
+        val encoded = URLEncoder.encode(item.title, "UTF-8")
+        val yearParam = item.year?.let {
+            if (item.type == MediaType.SERIES) "&first_air_date_year=$it" else "&year=$it"
+        } ?: ""
+        val json = getJson("$TMDB_BASE/search/$endpoint?query=$encoded$yearParam&language=cs-CZ&api_key=$apiKey")
+            ?: return null
+        val obj = json.optJSONArray("results")?.optJSONObject(0) ?: return null
+        val tmdbId = obj.optInt("id", 0).takeIf { it > 0 } ?: return null
+        val posterPath = obj.optString("poster_path", "").takeIf { it.startsWith("/") }
+        val backdropPath = obj.optString("backdrop_path", "").takeIf { it.startsWith("/") }
+        return item.copy(
+            tmdbId = tmdbId,
+            posterUrl = posterPath?.let { "$TMDB_IMG_POSTER$it" } ?: item.posterUrl,
+            backdropUrl = backdropPath?.let { "$TMDB_IMG_BACKDROP$it" } ?: item.backdropUrl
+        )
     }
 
     private fun findTmdbByImdbId(item: CatalogItem, apiKey: String): CatalogItem? {
@@ -953,28 +999,28 @@ class CatalogApi(
             ),
             CatalogItem(
                 id = "xmas_andel_pane_2_2016",
-                imdbId = "tt5981728",
+                imdbId = "tt6175116",
                 type = MediaType.MOVIE,
                 title = "Anděl Páně 2",
                 originalTitle = "Andel Pane 2",
                 year = 2016,
                 overview = "Anděl Petronel a čert Uriáš se na předvečer svatého Mikuláše vydávají na Zem najít ztracené jablko Poznání.",
-                posterUrl = "https://images.metahub.space/poster/medium/tt5981728/img",
-                backdropUrl = "https://images.metahub.space/background/medium/tt5981728/img",
+                posterUrl = "https://images.metahub.space/poster/medium/tt6175116/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt6175116/img",
                 rating = 7.7,
                 genres = listOf("Pohádka", "Komedie", "Vánoční"),
                 runtimeMinutes = 99
             ),
             CatalogItem(
                 id = "xmas_s_certy_nejsou_zerty_1984",
-                imdbId = "tt0089950",
+                imdbId = "tt0087731",
                 type = MediaType.MOVIE,
                 title = "S čerty nejsou žerty",
                 originalTitle = "S certy nejsou zerty",
                 year = 1984,
                 overview = "Legendární česká pohádka o poctivém Petrovi Máchalovi, chamtivé maceše a spravedlivém pekle.",
-                posterUrl = "https://images.metahub.space/poster/medium/tt0089950/img",
-                backdropUrl = "https://images.metahub.space/background/medium/tt0089950/img",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0087731/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0087731/img",
                 rating = 8.4,
                 genres = listOf("Pohádka", "Komedie", "Rodinný"),
                 runtimeMinutes = 91
@@ -1086,14 +1132,14 @@ class CatalogApi(
             ),
             CatalogItem(
                 id = "kids_s_certy_1984",
-                imdbId = "tt0089950",
+                imdbId = "tt0087731",
                 type = MediaType.MOVIE,
                 title = "S čerty nejsou žerty",
                 originalTitle = "S certy nejsou zerty",
                 year = 1984,
                 overview = "Petr Máchal, zlá macecha a spravedlivé peklo v jedné z nejoblíbenějších českých pohádek.",
-                posterUrl = "https://images.metahub.space/poster/medium/tt0089950/img",
-                backdropUrl = "https://images.metahub.space/background/medium/tt0089950/img",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0087731/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0087731/img",
                 rating = 8.4,
                 genres = listOf("Pohádka", "Komedie"),
                 runtimeMinutes = 91
@@ -1114,56 +1160,56 @@ class CatalogApi(
             ),
             CatalogItem(
                 id = "kids_andel_pane_2_2016",
-                imdbId = "tt5981728",
+                imdbId = "tt6175116",
                 type = MediaType.MOVIE,
                 title = "Anděl Páně 2",
                 originalTitle = "Andel Pane 2",
                 year = 2016,
                 overview = "Pokračování dobrodružství anděla Petronela a čerta Uriáše při hledání ztraceného jablka.",
-                posterUrl = "https://images.metahub.space/poster/medium/tt5981728/img",
-                backdropUrl = "https://images.metahub.space/background/medium/tt5981728/img",
+                posterUrl = "https://images.metahub.space/poster/medium/tt6175116/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt6175116/img",
                 rating = 7.7,
                 genres = listOf("Pohádka", "Rodinný"),
                 runtimeMinutes = 99
             ),
             CatalogItem(
                 id = "kids_lotrando_1997",
-                imdbId = "tt0120735",
+                imdbId = "tt0119568",
                 type = MediaType.MOVIE,
                 title = "Lotrando a Zubejda",
                 originalTitle = "Lotrando a Zubejda",
                 year = 1997,
                 overview = "Loupežnický synek Lotrando se vydává do světa a poznává nemocnou princeznu Zubejdu.",
-                posterUrl = "https://images.metahub.space/poster/medium/tt0120735/img",
-                backdropUrl = "https://images.metahub.space/background/medium/tt0120735/img",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0119568/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0119568/img",
                 rating = 7.8,
                 genres = listOf("Pohádka", "Komedie"),
                 runtimeMinutes = 99
             ),
             CatalogItem(
                 id = "kids_at_ziji_duchove_1977",
-                imdbId = "tt0075705",
+                imdbId = "tt0075703",
                 type = MediaType.MOVIE,
                 title = "Ať žijí duchové!",
                 originalTitle = "At ziji duchove!",
                 year = 1977,
                 overview = "Parta dětí se snaží zachránit starý hrad Brtník a pomáhají jim při tom kouzelní duchové i trpaslíci.",
-                posterUrl = "https://images.metahub.space/poster/medium/tt0075705/img",
-                backdropUrl = "https://images.metahub.space/background/medium/tt0075705/img",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0075703/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0075703/img",
                 rating = 7.9,
                 genres = listOf("Rodinný", "Pohádka", "Komedie"),
                 runtimeMinutes = 84
             ),
             CatalogItem(
                 id = "kids_tajemstvi_stare_bambitky_2011",
-                imdbId = "tt2114461",
+                imdbId = "tt2154715",
                 type = MediaType.MOVIE,
                 title = "Tajemství staré bambitky",
                 originalTitle = "Tajemstvi stare bambitky",
                 year = 2011,
                 overview = "Hrnčířův učeň Jakub a vesnická dívka Anička se postaví chamtivým rádcům mladého krále.",
-                posterUrl = "https://images.metahub.space/poster/medium/tt2114461/img",
-                backdropUrl = "https://images.metahub.space/background/medium/tt2114461/img",
+                posterUrl = "https://images.metahub.space/poster/medium/tt2154715/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt2154715/img",
                 rating = 7.0,
                 genres = listOf("Pohádka", "Rodinný"),
                 runtimeMinutes = 86
@@ -1282,40 +1328,40 @@ class CatalogApi(
         items = listOf(
             CatalogItem(
                 id = "kids_pat_a_mat_1976",
-                imdbId = "tt0825995",
+                imdbId = "tt0841929",
                 type = MediaType.SERIES,
                 title = "Pat a Mat",
                 originalTitle = "Pat a Mat",
                 year = 1976,
                 overview = "Kultovní český večerníček o dvou nešikovných, ale nezdolných kutilech.",
-                posterUrl = "https://images.metahub.space/poster/medium/tt0825995/img",
-                backdropUrl = "https://images.metahub.space/background/medium/tt0825995/img",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0841929/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0841929/img",
                 rating = 8.4,
                 genres = listOf("Animovaný", "Komedie", "Rodinný")
             ),
             CatalogItem(
                 id = "kids_krkonosske_pohadky_1974",
-                imdbId = "tt0324869",
+                imdbId = null,
                 type = MediaType.SERIES,
                 title = "Krkonošské pohádky",
                 originalTitle = "Krkonosske pohadky",
                 year = 1974,
                 overview = "Krakonoš, Trautenberk, Anče, Kuba a hajný v legendárním českém večerníčku.",
-                posterUrl = "https://images.metahub.space/poster/medium/tt0324869/img",
-                backdropUrl = "https://images.metahub.space/background/medium/tt0324869/img",
+                posterUrl = null,
+                backdropUrl = null,
                 rating = 8.4,
                 genres = listOf("Pohádka", "Rodinný")
             ),
             CatalogItem(
                 id = "kids_byl_jednou_jeden_zivot_1987",
-                imdbId = "tt0284735",
+                imdbId = "tt0284482",
                 type = MediaType.SERIES,
                 title = "Byl jednou jeden… život",
                 originalTitle = "Il était une fois... la vie",
                 year = 1987,
                 overview = "Kultovní animovaný seriál, který dětem zábavně vysvětluje, jak funguje lidské tělo.",
-                posterUrl = "https://images.metahub.space/poster/medium/tt0284735/img",
-                backdropUrl = "https://images.metahub.space/background/medium/tt0284735/img",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0284482/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0284482/img",
                 rating = 8.4,
                 genres = listOf("Animovaný", "Rodinný")
             ),
@@ -1354,14 +1400,14 @@ class CatalogApi(
         items = listOf(
             CatalogItem(
                 id = "cz_vlny_2024",
-                imdbId = "tt27729779",
+                imdbId = "tt27587485",
                 type = MediaType.MOVIE,
                 title = "Vlny",
                 originalTitle = "Vlny",
                 year = 2024,
                 overview = "Dobový thriller Jiřího Mádla inspirovaný skutečnými příběhy novinářů Československého rozhlasu na konci 60. let.",
-                posterUrl = "https://images.metahub.space/poster/medium/tt27729779/img",
-                backdropUrl = "https://images.metahub.space/background/medium/tt27729779/img",
+                posterUrl = "https://images.metahub.space/poster/medium/tt27587485/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt27587485/img",
                 rating = 8.4,
                 genres = listOf("Historický", "Drama", "Thriller"),
                 runtimeMinutes = 131
@@ -1382,42 +1428,42 @@ class CatalogApi(
             ),
             CatalogItem(
                 id = "cz_bod_obnovy_2023",
-                imdbId = "tt15189056",
+                imdbId = "tt9362492",
                 type = MediaType.MOVIE,
                 title = "Bod obnovy",
                 originalTitle = "Restore Point",
                 year = 2023,
                 overview = "Strhující české sci-fi z roku 2041, kde má každý občan ústavní právo být po násilné smrti oživen ze zálohy.",
-                posterUrl = "https://images.metahub.space/poster/medium/tt15189056/img",
-                backdropUrl = "https://images.metahub.space/background/medium/tt15189056/img",
+                posterUrl = "https://images.metahub.space/poster/medium/tt9362492/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt9362492/img",
                 rating = 7.2,
                 genres = listOf("Sci-Fi", "Krimi", "Thriller"),
                 runtimeMinutes = 111
             ),
             CatalogItem(
                 id = "cz_samotari_2000",
-                imdbId = "tt0240879",
+                imdbId = "tt0219288",
                 type = MediaType.MOVIE,
                 title = "Samotáři",
                 originalTitle = "Samotari",
                 year = 2000,
                 overview = "Příběhy sedmi mladých lidí v Praze na konci 90. let, jejichž osudy se nečekaně proplétají.",
-                posterUrl = "https://images.metahub.space/poster/medium/tt0240879/img",
-                backdropUrl = "https://images.metahub.space/background/medium/tt0240879/img",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0219288/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0219288/img",
                 rating = 8.1,
                 genres = listOf("Komedie", "Drama"),
                 runtimeMinutes = 103
             ),
             CatalogItem(
                 id = "cz_andel_pane_2_2016",
-                imdbId = "tt5981728",
+                imdbId = "tt6175116",
                 type = MediaType.MOVIE,
                 title = "Anděl Páně 2",
                 originalTitle = "Andel Pane 2",
                 year = 2016,
                 overview = "Anděl Petronel a čert Uriáš se vydávají na Zem najít ztracené jablko ze stromu Poznání.",
-                posterUrl = "https://images.metahub.space/poster/medium/tt5981728/img",
-                backdropUrl = "https://images.metahub.space/background/medium/tt5981728/img",
+                posterUrl = "https://images.metahub.space/poster/medium/tt6175116/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt6175116/img",
                 rating = 7.7,
                 genres = listOf("Pohádka", "Komedie", "Rodinný"),
                 runtimeMinutes = 99
@@ -1438,14 +1484,14 @@ class CatalogApi(
             ),
             CatalogItem(
                 id = "cz_zatopek_2021",
-                imdbId = "tt7938424",
+                imdbId = "tt4806220",
                 type = MediaType.MOVIE,
                 title = "Zátopek",
                 originalTitle = "Zatopek",
                 year = 2021,
                 overview = "Životopisné drama o legendárním československém běžci Emilu Zátopkovi a jeho ženě Daně.",
-                posterUrl = "https://images.metahub.space/poster/medium/tt7938424/img",
-                backdropUrl = "https://images.metahub.space/background/medium/tt7938424/img",
+                posterUrl = "https://images.metahub.space/poster/medium/tt4806220/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt4806220/img",
                 rating = 7.8,
                 genres = listOf("Životopisný", "Drama", "Sportovní"),
                 runtimeMinutes = 131
@@ -1459,53 +1505,53 @@ class CatalogApi(
         items = listOf(
             CatalogItem(
                 id = "cz_most_2019",
-                imdbId = "tt9348692",
+                imdbId = "tt9476250",
                 type = MediaType.SERIES,
                 title = "MOST!",
                 originalTitle = "MOST!",
                 year = 2019,
                 overview = "Nekorektní komediální seriál Jana Prušinovského a Petra Kolečka ze severočeského Mostu. Dycky Most!",
-                posterUrl = "https://images.metahub.space/poster/medium/tt9348692/img",
-                backdropUrl = "https://images.metahub.space/background/medium/tt9348692/img",
+                posterUrl = "https://images.metahub.space/poster/medium/tt9476250/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt9476250/img",
                 rating = 8.4,
                 genres = listOf("Komedie", "Drama")
             ),
             CatalogItem(
                 id = "cz_pustina_2016",
-                imdbId = "tt5459168",
+                imdbId = "tt5952136",
                 type = MediaType.SERIES,
                 title = "Pustina",
                 originalTitle = "Wasteland",
                 year = 2016,
                 overview = "Temná dramatická minisérie HBO odehrávající se v severočeské vesnici na hranici těžebních limitů.",
-                posterUrl = "https://images.metahub.space/poster/medium/tt5459168/img",
-                backdropUrl = "https://images.metahub.space/background/medium/tt5459168/img",
+                posterUrl = "https://images.metahub.space/poster/medium/tt5952136/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt5952136/img",
                 rating = 8.2,
                 genres = listOf("Krimi", "Drama", "Mystery")
             ),
             CatalogItem(
                 id = "cz_okresni_prebor_2010",
-                imdbId = "tt1728445",
+                imdbId = "tt1787132",
                 type = MediaType.SERIES,
                 title = "Okresní přebor",
                 originalTitle = "Okresni prebor",
                 year = 2010,
                 overview = "Kultovní komediální seriál z prostředí venkovského fotbalového klubu Slavoj Houslice.",
-                posterUrl = "https://images.metahub.space/poster/medium/tt1728445/img",
-                backdropUrl = "https://images.metahub.space/background/medium/tt1728445/img",
+                posterUrl = "https://images.metahub.space/poster/medium/tt1787132/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt1787132/img",
                 rating = 8.5,
                 genres = listOf("Komedie", "Sportovní")
             ),
             CatalogItem(
                 id = "cz_devadesatky_2022",
-                imdbId = "tt16419036",
+                imdbId = "tt15730302",
                 type = MediaType.SERIES,
                 title = "Devadesátky",
                 originalTitle = "Devadesatky",
                 year = 2022,
                 overview = "Kriminální minisérie o vyšetřování nejznámějších případů pražské mordparty v divokých 90. letech.",
-                posterUrl = "https://images.metahub.space/poster/medium/tt16419036/img",
-                backdropUrl = "https://images.metahub.space/background/medium/tt16419036/img",
+                posterUrl = "https://images.metahub.space/poster/medium/tt15730302/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt15730302/img",
                 rating = 8.4,
                 genres = listOf("Krimi", "Historický")
             )

@@ -10,6 +10,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -129,13 +130,22 @@ fun WebshareTvApp(viewModel: MainViewModel) {
             }
 
             CompositionLocalProvider(LocalFocusRestoreRegistry provides focusRegistry) {
+                val settingsLeftFocusRequester = remember { FocusRequester() }
+                val tabContentFocusRequesters = remember {
+                    NavTab.entries.associateWith { FocusRequester() }
+                }
+
                 // 1. Main Netflix-style Shell (kept mounted so scroll & focus survive Detail/Player overlays)
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .focusProperties { canFocus = !hasOverlay }
+                    modifier = if (hasOverlay) {
+                        Modifier
+                            .fillMaxSize()
+                            .focusGroup()
+                            .focusProperties { canFocus = false }
+                    } else {
+                        Modifier.fillMaxSize()
+                    }
                 ) {
-                    val settingsLeftFocusRequester = remember { FocusRequester() }
                     val targetTint = when (state.activeTab) {
                         NavTab.HOME -> Color(0xFF280B10)      // Subtle crimson
                         NavTab.MOVIES -> Color(0xFF0A2347)    // Rich sapphire blue
@@ -159,7 +169,8 @@ fun WebshareTvApp(viewModel: MainViewModel) {
                                 userProfile = state.userProfile,
                                 preferences = state.preferences,
                                 onSelectTab = { viewModel.selectTab(it) },
-                                settingsLeftFocusRequester = settingsLeftFocusRequester
+                                settingsLeftFocusRequester = settingsLeftFocusRequester,
+                                contentFocusRequester = tabContentFocusRequesters[state.activeTab]
                             )
 
                             Crossfade(
@@ -185,9 +196,14 @@ fun WebshareTvApp(viewModel: MainViewModel) {
                                         }
                                         Box(modifier = Modifier.fillMaxSize()) {
                                             Box(
-                                                modifier = Modifier
-                                                    .fillMaxSize()
-                                                    .focusProperties { canFocus = expandedCategory == null }
+                                                modifier = if (expandedCategory != null) {
+                                                    Modifier
+                                                        .fillMaxSize()
+                                                        .focusGroup()
+                                                        .focusProperties { canFocus = false }
+                                                } else {
+                                                    Modifier.fillMaxSize()
+                                                }
                                             ) {
                                                 HomeCatalogScreen(
                                                     sections = state.sections,
@@ -195,6 +211,7 @@ fun WebshareTvApp(viewModel: MainViewModel) {
                                                     filterType = null,
                                                     isLoading = state.isCatalogLoading,
                                                     showCategoryTiles = true,
+                                                    contentFocusRequester = tabContentFocusRequesters[NavTab.HOME],
                                                     onOpenCategory = { viewModel.openCategory(it) },
                                                     onFocusItem = { viewModel.updateFocusedHero(it) },
                                                     onOpenDetail = { viewModel.openMediaDetail(it) },
@@ -230,6 +247,7 @@ fun WebshareTvApp(viewModel: MainViewModel) {
                                         watchHistory = state.watchHistory,
                                         filterType = MediaType.MOVIE,
                                         isLoading = state.isCatalogLoading,
+                                        contentFocusRequester = tabContentFocusRequesters[NavTab.MOVIES],
                                         onFocusItem = { viewModel.updateFocusedHero(it) },
                                         onOpenDetail = { viewModel.openMediaDetail(it) },
                                         onResumeHistory = { viewModel.resumeFromWatchHistory(it, startFromBeginning = false) },
@@ -246,6 +264,7 @@ fun WebshareTvApp(viewModel: MainViewModel) {
                                         watchHistory = state.watchHistory,
                                         filterType = MediaType.SERIES,
                                         isLoading = state.isCatalogLoading,
+                                        contentFocusRequester = tabContentFocusRequesters[NavTab.SERIES],
                                         onFocusItem = { viewModel.updateFocusedHero(it) },
                                         onOpenDetail = { viewModel.openMediaDetail(it) },
                                         onResumeHistory = { viewModel.resumeFromWatchHistory(it, startFromBeginning = false) },
@@ -262,6 +281,7 @@ fun WebshareTvApp(viewModel: MainViewModel) {
                                         watchHistory = emptyList(),
                                         filterType = null,
                                         isLoading = state.isKidsLoading,
+                                        contentFocusRequester = tabContentFocusRequesters[NavTab.KIDS],
                                         onFocusItem = { viewModel.updateFocusedHero(it) },
                                         onOpenDetail = { viewModel.openMediaDetail(it) },
                                         onResumeHistory = { viewModel.resumeFromWatchHistory(it, startFromBeginning = false) },
@@ -288,6 +308,7 @@ fun WebshareTvApp(viewModel: MainViewModel) {
                                 MyListScreen(
                                     myList = state.myList,
                                     watchHistory = state.watchHistory,
+                                    contentFocusRequester = tabContentFocusRequesters[NavTab.MY_LIST],
                                     onFocusItem = { viewModel.updateFocusedHero(it) },
                                     onOpenDetail = { viewModel.openMediaDetail(it) },
                                     onResumeHistory = { viewModel.resumeFromWatchHistory(it, startFromBeginning = false) },
