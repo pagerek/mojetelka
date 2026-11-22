@@ -56,6 +56,7 @@ import cz.webshare.tv.model.UserPreferences
 import cz.webshare.tv.ui.components.TechBadgePill
 import cz.webshare.tv.ui.components.TvButton
 import cz.webshare.tv.ui.components.TvColors
+import cz.webshare.tv.ui.components.TvIconButton
 import cz.webshare.tv.ui.components.tvBringIntoViewContainer
 import cz.webshare.tv.ui.components.tvBringIntoViewPadding
 
@@ -100,21 +101,19 @@ fun MediaDetailScreen(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(460.dp)
+                    .height(520.dp)
             )
         }
 
-        // Gradient Overlays
+        // Apple TV+ / Netflix-style directional vignette: keeps upper-right scene clear
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.horizontalGradient(
-                        listOf(
-                            TvColors.Background,
-                            Color(0xDD090A0F),
-                            Color(0x66090A0F)
-                        )
+                        0.0f to Color(0xF0090A0F),
+                        0.42f to Color(0x9E090A0F),
+                        0.82f to Color.Transparent
                     )
                 )
         )
@@ -123,11 +122,10 @@ fun MediaDetailScreen(
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        listOf(
-                            Color(0x66090A0F),
-                            Color(0xDD090A0F),
-                            TvColors.Background
-                        )
+                        0.0f to Color(0x22090A0F),
+                        0.45f to Color(0x55090A0F),
+                        0.78f to TvColors.Background,
+                        1.0f to TvColors.Background
                     )
                 )
         )
@@ -135,274 +133,194 @@ fun MediaDetailScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 42.dp),
-            contentPadding = PaddingValues(top = 28.dp, bottom = 56.dp)
+                .padding(horizontal = 46.dp),
+            contentPadding = PaddingValues(top = 24.dp, bottom = 56.dp)
         ) {
             item {
-                val matchScore = remember(item.id, item.rating) {
-                    val r = item.rating ?: 8.2
-                    (r * 10).toInt().coerceIn(78, 99)
-                }
-
                 Row(
                     modifier = Modifier.tvBringIntoViewPadding(
-                        topPadding = 28.dp,
-                        bottomPadding = 24.dp
+                        topPadding = 24.dp,
+                        bottomPadding = 20.dp
                     ),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TvButton(
-                        text = "Zpět",
+                    TvIconButton(
                         icon = Icons.AutoMirrored.Filled.ArrowBack,
-                        paddingValues = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                        contentDescription = "Zpět",
+                        size = 38.dp,
                         onClick = onBack
                     )
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(18.dp)
-                                .clip(RoundedCornerShape(3.dp))
-                                .background(TvColors.NetflixRed),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "W",
-                                color = Color.White,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Black
-                            )
-                        }
-                        Text(
-                            text = if (item.type == MediaType.SERIES) "SERIÁL WEBSHARE" else "FILM WEBSHARE",
-                            color = Color(0xFFD4D4D4),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = 2.sp
-                        )
-                    }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(if (item.type == MediaType.SERIES) 64.dp else 128.dp))
 
                 Text(
                     text = item.title,
                     color = Color.White,
-                    fontSize = 38.sp,
-                    fontWeight = FontWeight.Black
+                    fontSize = 40.sp,
+                    lineHeight = 44.sp,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.width(640.dp)
                 )
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-                // Netflix Metadata Line
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "$matchScore% shoda",
-                        color = TvColors.VipGreen,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-
-                    item.year?.let {
-                        Text(
-                            text = it.toString(),
-                            color = Color(0xFFE5E5E5),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-
+                // Clean, authentic metadata row
+                val metaParts = buildList {
+                    item.year?.let { add(it.toString()) }
                     item.runtimeMinutes?.let { mins ->
                         val hrs = mins / 60
                         val rem = mins % 60
-                        Text(
-                            text = if (hrs > 0) "${hrs}h ${rem}m" else "${rem}m",
-                            color = TvColors.TextSecondary,
-                            fontSize = 14.sp
-                        )
+                        add(if (hrs > 0) "${hrs}h ${rem}m" else "${rem}m")
                     }
-
-                    Box(
-                        modifier = Modifier
-                            .border(1.dp, Color(0x88FFFFFF), RoundedCornerShape(3.dp))
-                            .padding(horizontal = 6.dp, vertical = 1.dp)
-                    ) {
-                        Text(
-                            text = "4K • HD",
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                    }
-
                     if (item.genres.isNotEmpty()) {
-                        Text(
-                            text = item.genres.joinToString(" • "),
-                            color = Color(0xFFD4D4D4),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium
-                        )
+                        add(item.genres.take(3).joinToString(", "))
+                    }
+                    item.rating?.takeIf { it > 0.0 }?.let { r ->
+                        add("★ %.1f".format(r))
                     }
                 }
-
-                if (!item.originalTitle.equals(item.title, ignoreCase = true)) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                if (metaParts.isNotEmpty()) {
                     Text(
-                        text = "Originální název: ${item.originalTitle}",
+                        text = metaParts.joinToString("  ·  "),
+                        color = Color(0xFFD4D8E0),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                if (!item.originalTitle.isNullOrBlank() &&
+                    !item.originalTitle.equals(item.title, ignoreCase = true)
+                ) {
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = item.originalTitle,
                         color = TvColors.TextMuted,
-                        fontSize = 13.sp
+                        fontSize = 12.sp
                     )
                 }
 
                 if (item.type == MediaType.SERIES && selectedEpisode != null) {
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Vybraná epizoda: ${selectedEpisode.code} – ${selectedEpisode.title}",
+                        text = "${selectedEpisode.code} – ${selectedEpisode.title}",
                         color = TvColors.AccentGold,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Text(
-                    text = item.overview,
-                    color = Color(0xFFE5E7EB),
-                    fontSize = 15.sp,
-                    modifier = Modifier.width(740.dp)
-                )
+                val cleanOverview = item.overview
+                    .takeIf { it.isNotBlank() && !it.contains("dostupné ke streamování přes Webshare", ignoreCase = true) }
+                if (!cleanOverview.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = cleanOverview,
+                        color = Color(0xFFE5E7EB),
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.width(600.dp)
+                    )
+                }
 
                 if (details.cast.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Hrají: ${details.cast.joinToString(", ")}",
+                        text = "Hrají: ${details.cast.take(4).joinToString(", ")}",
                         color = TvColors.TextSecondary,
-                        fontSize = 13.sp
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.width(600.dp)
                     )
                 }
 
                 Spacer(modifier = Modifier.height(22.dp))
 
-                // Primary Action Buttons
+                // Clean Action Buttons (no oversized boxes or duplicated subtitles)
                 val recommended = streamResolution?.recommendedStream
                 val primaryPlayLabel = when {
-                    isResolvingStreams -> "Hledám a seskupuji streamy na Webshare..."
-                    recommended != null -> "Přehrát (${recommended.language.badge} • ${recommended.quality.badge} • ${recommended.file.formattedSize})"
-                    else -> "Přehrát (${preferences.preferredLanguage.badge} • ${preferences.preferredQuality.badge})"
-                }
-
-                val primaryPlaySubtitle = when {
-                    isResolvingStreams -> "Filtruji duplicity, kvality a jazyky"
-                    streamResolution?.selectionNotice != null -> streamResolution.selectionNotice
-                    else -> "Výchozí volba podle tvého nastavení"
+                    item.type == MediaType.SERIES && selectedEpisode != null -> "Přehrát ${selectedEpisode.code}"
+                    else -> "Přehrát"
                 }
 
                 Row(
                     modifier = Modifier.tvBringIntoViewPadding(
-                        topPadding = 28.dp,
-                        bottomPadding = 24.dp
+                        topPadding = 24.dp,
+                        bottomPadding = 20.dp
                     ),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     TvButton(
                         text = primaryPlayLabel,
-                        subtitle = primaryPlaySubtitle,
                         icon = Icons.Default.PlayArrow,
                         isPrimary = true,
+                        paddingValues = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
                         modifier = Modifier.focusRequester(playFocusRequester),
                         onClick = onPrimaryPlay
                     )
 
-                    val groupCount = streamResolution?.groups?.size ?: 0
                     val totalStreams = streamResolution?.allStreams?.size ?: 0
                     TvButton(
-                        text = if (totalStreams > 0) {
-                            "Kvalita a jazyk ($groupCount skupin / $totalStreams zdrojů)"
-                        } else {
-                            "Vybrat kvalitu a jazyk"
-                        },
-                        subtitle = "Ruční výběr 4K / 1080p / 720p a CZ / EN",
+                        text = if (totalStreams > 0) "Verze ($totalStreams)" else "Verze",
                         icon = Icons.Default.Settings,
+                        paddingValues = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
                         onClick = onOpenStreamPicker
                     )
 
                     TvButton(
-                        text = if (isInMyList) "V mém seznamu" else "+ Můj seznam",
+                        text = if (isInMyList) "V seznamu" else "Můj seznam",
                         icon = if (isInMyList) Icons.Default.Check else Icons.Default.Star,
                         isSelected = isInMyList,
+                        paddingValues = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
                         onClick = { onToggleMyList(item) }
                     )
                 }
 
+                Spacer(modifier = Modifier.height(10.dp))
+
                 if (isResolvingStreams) {
-                    Spacer(modifier = Modifier.height(14.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(
-                            color = TvColors.NetflixRed,
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.5.dp
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "Prohledávám Webshare.cz a seskupuji výsledky podle kvality a jazyka...",
                             color = TvColors.TextSecondary,
-                            fontSize = 13.sp
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Hledám dostupné verze na Webshare...",
+                            color = TvColors.TextMuted,
+                            fontSize = 12.sp
                         )
                     }
+                } else if (recommended != null) {
+                    val notice = streamResolution.selectionNotice?.let { " · $it" } ?: ""
+                    Text(
+                        text = "${recommended.language.badge} · ${recommended.quality.badge} · ${recommended.file.formattedSize}$notice",
+                        color = TvColors.TextMuted,
+                        fontSize = 12.sp
+                    )
                 }
 
                 if (!streamError.isNullOrEmpty()) {
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(8.dp))
                             .background(Color(0x33E50914))
-                            .border(1.dp, TvColors.NetflixRed, RoundedCornerShape(10.dp))
-                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                            .border(1.dp, TvColors.NetflixRed, RoundedCornerShape(8.dp))
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
                     ) {
                         Text(
                             text = streamError,
                             color = Color(0xFFFFB4B8),
                             fontSize = 13.sp
                         )
-                    }
-                }
-
-                // Quick Grouped Quality x Language Bar right on the Detail Screen!
-                if (streamResolution != null && streamResolution.groups.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(22.dp))
-                    Text(
-                        text = "Dostupné verze",
-                        color = TvColors.TextSecondary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(streamResolution.groups, key = { "${it.language}_${it.quality}" }) { group ->
-                            val isRecommendedGroup = recommended != null &&
-                                recommended.language == group.language &&
-                                recommended.quality == group.quality
-
-                            TvButton(
-                                text = "${group.language.badge} • ${group.quality.badge}",
-                                subtitle = "${group.bestStream.file.formattedSize} (${group.streams.size} souborů)",
-                                isSelected = isRecommendedGroup,
-                                paddingValues = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-                                onClick = { onPlaySpecificStream(group.bestStream) }
-                            )
-                        }
                     }
                 }
             }

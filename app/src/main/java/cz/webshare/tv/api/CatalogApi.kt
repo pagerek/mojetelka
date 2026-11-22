@@ -70,6 +70,59 @@ class CatalogApi(
         }
 
     /**
+     * Fetches a larger library of items (up to ~60) when the user opens a category tile.
+     */
+    suspend fun loadExpandedCategoryItems(
+        sectionId: String,
+        tmdbApiKey: String,
+        baseItems: List<CatalogItem>
+    ): List<CatalogItem> = withContext(Dispatchers.IO) {
+        val cleanKey = tmdbApiKey.trim()
+        val extra: List<CatalogItem> = if (cleanKey.isNotEmpty()) {
+            val (baseUrl, type) = when (sectionId) {
+                "christmas_movies" -> "$TMDB_BASE/discover/movie?with_keywords=207317&sort_by=popularity.desc&language=cs-CZ&api_key=$cleanKey" to MediaType.MOVIE
+                "trending_movies" -> "$TMDB_BASE/trending/movie/week?language=cs-CZ&api_key=$cleanKey" to MediaType.MOVIE
+                "trending_series" -> "$TMDB_BASE/trending/tv/week?language=cs-CZ&api_key=$cleanKey" to MediaType.SERIES
+                "drama_movies" -> "$TMDB_BASE/discover/movie?with_genres=18&sort_by=popularity.desc&language=cs-CZ&api_key=$cleanKey" to MediaType.MOVIE
+                "thriller_movies" -> "$TMDB_BASE/discover/movie?with_genres=53&sort_by=popularity.desc&language=cs-CZ&api_key=$cleanKey" to MediaType.MOVIE
+                "documentary_movies" -> "$TMDB_BASE/discover/movie?with_genres=99&sort_by=popularity.desc&language=cs-CZ&api_key=$cleanKey" to MediaType.MOVIE
+                "scifi_action" -> "$TMDB_BASE/discover/movie?with_genres=28,878&sort_by=popularity.desc&language=cs-CZ&api_key=$cleanKey" to MediaType.MOVIE
+                "comedy_movies" -> "$TMDB_BASE/discover/movie?with_genres=35&sort_by=popularity.desc&language=cs-CZ&api_key=$cleanKey" to MediaType.MOVIE
+                "top_movies" -> "$TMDB_BASE/movie/top_rated?language=cs-CZ&api_key=$cleanKey" to MediaType.MOVIE
+                else -> null to MediaType.MOVIE
+            }
+            if (baseUrl != null) {
+                coroutineScope {
+                    val p1 = async { fetchTmdbList("$baseUrl&page=1", type) }
+                    val p2 = async { fetchTmdbList("$baseUrl&page=2", type) }
+                    val p3 = async { fetchTmdbList("$baseUrl&page=3", type) }
+                    p1.await() + p2.await() + p3.await()
+                }
+            } else {
+                emptyList()
+            }
+        } else {
+            val (url, type) = when (sectionId) {
+                "christmas_movies" -> "$CINEMETA_BASE/catalog/movie/top/search=Christmas.json" to MediaType.MOVIE
+                "top_movies" -> "$CINEMETA_BASE/catalog/movie/top.json" to MediaType.MOVIE
+                "drama_movies" -> "$CINEMETA_BASE/catalog/movie/top/genre=Drama.json" to MediaType.MOVIE
+                "thriller_movies" -> "$CINEMETA_BASE/catalog/movie/top/genre=Thriller.json" to MediaType.MOVIE
+                "documentary_movies" -> "$CINEMETA_BASE/catalog/movie/top/genre=Documentary.json" to MediaType.MOVIE
+                "comedy_movies" -> "$CINEMETA_BASE/catalog/movie/top/genre=Comedy.json" to MediaType.MOVIE
+                "top_series" -> "$CINEMETA_BASE/catalog/series/top.json" to MediaType.SERIES
+                "recent_movies" -> "$CINEMETA_BASE/catalog/movie/year/year=2024.json" to MediaType.MOVIE
+                else -> null to MediaType.MOVIE
+            }
+            if (url != null) {
+                runCatching { fetchCinemetaCatalog(url, type, limit = 60) }.getOrDefault(emptyList())
+            } else {
+                emptyList()
+            }
+        }
+        mergeUniqueCatalogItems(baseItems, extra)
+    }
+
+    /**
      * Searches movies and TV series across TMDB / Cinemeta AND clusters raw Webshare video files
      * into deduplicated title cards so even obscure Czech movies appear as single Netflix cards.
      *

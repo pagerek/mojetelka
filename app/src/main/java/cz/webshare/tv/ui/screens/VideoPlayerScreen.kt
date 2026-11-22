@@ -6,6 +6,13 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -102,6 +109,8 @@ fun VideoPlayerScreen(
 
     var isPlaying by remember { mutableStateOf(true) }
     var isBuffering by remember { mutableStateOf(true) }
+    var hasRenderedFirstFrame by remember(session.directVideoUrl) { mutableStateOf(false) }
+    var showBufferingSpinner by remember { mutableStateOf(false) }
     var currentPosMs by remember { mutableLongStateOf(session.startPositionMs) }
     var durationMs by remember { mutableLongStateOf(0L) }
     var showControls by remember { mutableStateOf(true) }
@@ -193,6 +202,18 @@ fun VideoPlayerScreen(
         }
     }
 
+    // Debounce buffering spinner during seeks so quick scrubs don't flash an indicator
+    LaunchedEffect(isBuffering, hasRenderedFirstFrame) {
+        if (!isBuffering) {
+            showBufferingSpinner = false
+        } else if (!hasRenderedFirstFrame) {
+            showBufferingSpinner = true
+        } else {
+            delay(350L)
+            showBufferingSpinner = true
+        }
+    }
+
     // Listen to player events & extract embedded audio/subtitle tracks
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
@@ -203,6 +224,7 @@ fun VideoPlayerScreen(
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isBuffering = playbackState == Player.STATE_BUFFERING
                 if (playbackState == Player.STATE_READY) {
+                    hasRenderedFirstFrame = true
                     durationMs = exoPlayer.duration.coerceAtLeast(0L)
                     playbackEnded = false
                 } else if (playbackState == Player.STATE_ENDED) {
@@ -518,26 +540,57 @@ fun VideoPlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Buffering Indicator
-        if (isBuffering) {
+        // Clean, frameless Buffering Indicator (no boxy dialog during seeks)
+        AnimatedVisibility(
+            visible = showBufferingSpinner,
+            enter = fadeIn(animationSpec = tween(200)),
+            exit = fadeOut(animationSpec = tween(180)),
+            modifier = Modifier.fillMaxSize()
+        ) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(Color(0xBB090A0F))
-                        .padding(horizontal = 24.dp, vertical = 18.dp)
-                ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(
-                        color = TvColors.NetflixRed,
-                        modifier = Modifier.size(38.dp)
+                        color = Color.White.copy(alpha = 0.9f),
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(36.dp)
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
+                    if (!hasRenderedFirstFrame) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "Načítám...",
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+        }
+
+        // Sleek, borderless Seek Delta Pill positioned above the timeline (keeps center picture clear)
+        AnimatedVisibility(
+            visible = seekFeedbackText != null,
+            enter = fadeIn(animationSpec = tween(160)),
+            exit = fadeOut(animationSpec = tween(240)),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = 132.dp),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(Color(0x99090A0F))
+                        .padding(horizontal = 18.dp, vertical = 8.dp)
+                ) {
                     Text(
-                        text = "Načítám VIP stream (${session.activeStream.quality.badge} • ${session.activeStream.language.badge})...",
+                        text = "${seekFeedbackText.orEmpty()}  ·  ${formatDurationMs(currentPosMs)}",
                         color = Color.White,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
@@ -546,31 +599,23 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Instant Seek Delta Indicator (e.g. "-15 s" / "+15 s")
-        if (seekFeedbackText != null && !isBuffering) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xCC090A0F))
-                        .border(1.5.dp, TvColors.NetflixRed, RoundedCornerShape(12.dp))
-                        .padding(horizontal = 22.dp, vertical = 12.dp)
-                ) {
-                    Text(
-                        text = "$seekFeedbackText  •  ${formatDurationMs(currentPosMs)}",
-                        color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-            }
-        }
-
-        // Netflix-style Custom TV OSD Overlay
-        if (showControls) {
+        // Netflix-style Custom TV OSD Overlay with organic inhale / exhale animation
+        val inhaleEasing = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
+        val exhaleEasing = CubicBezierEasing(0.4f, 0f, 0.2f, 1f)
+        AnimatedVisibility(
+            visible = showControls,
+            enter = fadeIn(animationSpec = tween(durationMillis = 480, easing = inhaleEasing)) +
+                scaleIn(
+                    initialScale = 0.965f,
+                    animationSpec = tween(durationMillis = 520, easing = inhaleEasing)
+                ),
+            exit = fadeOut(animationSpec = tween(durationMillis = 420, easing = exhaleEasing)) +
+                scaleOut(
+                    targetScale = 0.97f,
+                    animationSpec = tween(durationMillis = 420, easing = exhaleEasing)
+                ),
+            modifier = Modifier.fillMaxSize()
+        ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()

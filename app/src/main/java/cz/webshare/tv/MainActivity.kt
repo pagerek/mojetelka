@@ -30,6 +30,7 @@ import cz.webshare.tv.ui.MainViewModel
 import cz.webshare.tv.ui.NavTab
 import cz.webshare.tv.ui.components.KidsAmbilightContainer
 import cz.webshare.tv.ui.components.TvColors
+import cz.webshare.tv.ui.screens.CategoryGridScreen
 import cz.webshare.tv.ui.screens.HomeCatalogScreen
 import cz.webshare.tv.ui.screens.LoginScreen
 import cz.webshare.tv.ui.screens.MediaDetailScreen
@@ -194,19 +195,33 @@ fun WebshareTvApp(viewModel: MainViewModel) {
                         ) { activeTab ->
                             when (activeTab) {
                                 NavTab.HOME -> {
-                                    HomeCatalogScreen(
-                                        sections = state.sections,
-                                        watchHistory = state.watchHistory,
-                                        filterType = null,
-                                        isLoading = state.isCatalogLoading,
-                                        onFocusItem = { viewModel.updateFocusedHero(it) },
-                                        onOpenDetail = { viewModel.openMediaDetail(it) },
-                                        onResumeHistory = { viewModel.resumeFromWatchHistory(it, startFromBeginning = false) },
-                                        onRestartHistoryFromBeginning = { viewModel.resumeFromWatchHistory(it, startFromBeginning = true) },
-                                        onMarkHistoryWatched = { viewModel.markWatchHistoryAsWatched(it) },
-                                        onRemoveHistoryItem = { viewModel.removeFromWatchHistory(it) },
-                                        onOpenHistoryDetail = { viewModel.openDetailFromWatchHistory(it) }
-                                    )
+                                    val expandedCategory = state.activeCategorySection
+                                    if (expandedCategory != null) {
+                                        BackHandler { viewModel.closeCategory() }
+                                        CategoryGridScreen(
+                                            section = expandedCategory,
+                                            isExpanding = state.isCategoryExpanding,
+                                            onBack = { viewModel.closeCategory() },
+                                            onFocusItem = { viewModel.updateFocusedHero(it) },
+                                            onOpenDetail = { viewModel.openMediaDetail(it) }
+                                        )
+                                    } else {
+                                        HomeCatalogScreen(
+                                            sections = state.sections,
+                                            watchHistory = state.watchHistory,
+                                            filterType = null,
+                                            isLoading = state.isCatalogLoading,
+                                            showCategoryTiles = true,
+                                            onOpenCategory = { viewModel.openCategory(it) },
+                                            onFocusItem = { viewModel.updateFocusedHero(it) },
+                                            onOpenDetail = { viewModel.openMediaDetail(it) },
+                                            onResumeHistory = { viewModel.resumeFromWatchHistory(it, startFromBeginning = false) },
+                                            onRestartHistoryFromBeginning = { viewModel.resumeFromWatchHistory(it, startFromBeginning = true) },
+                                            onMarkHistoryWatched = { viewModel.markWatchHistoryAsWatched(it) },
+                                            onRemoveHistoryItem = { viewModel.removeFromWatchHistory(it) },
+                                            onOpenHistoryDetail = { viewModel.openDetailFromWatchHistory(it) }
+                                        )
+                                    }
                                 }
 
                                 NavTab.MOVIES -> {

@@ -1,9 +1,13 @@
 package cz.webshare.tv.ui.screens
 
 import android.view.KeyEvent
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,14 +22,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -43,8 +52,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cz.webshare.tv.model.CatalogItem
@@ -61,6 +73,10 @@ import cz.webshare.tv.ui.components.TvContinueWatchingCard
 import cz.webshare.tv.ui.components.TvNavTabItem
 import cz.webshare.tv.ui.components.tvBringIntoViewContainer
 import cz.webshare.tv.ui.components.TvPosterCard
+import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -151,38 +167,59 @@ fun TopNavigationBar(
         }
 
         // Ultra-minimalist status text on the right (no heavy pill boxes or borders)
-        Row(
+        val clockFormat = remember { SimpleDateFormat("EEE d. M. · HH:mm", Locale("cs", "CZ")) }
+        var currentDateTime by remember { mutableStateOf(clockFormat.format(Date())) }
+        LaunchedEffect(Unit) {
+            while (true) {
+                currentDateTime = clockFormat.format(Date())
+                delay(15_000L)
+            }
+        }
+
+        Column(
             modifier = Modifier.align(Alignment.CenterEnd),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            Text(
-                text = "${preferences.preferredQuality.badge} · ${preferences.preferredLanguage.badge}",
-                color = TvColors.TextMuted,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1
-            )
-            if (userProfile != null) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(if (userProfile.isVip) TvColors.VipGreen else TvColors.AccentGold)
-                    )
-                    Text(
-                        text = if (userProfile.isVip) "${userProfile.vipDaysLeft}d" else userProfile.username,
-                        color = TvColors.TextSecondary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1
-                    )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "${preferences.preferredQuality.badge} · ${preferences.preferredLanguage.badge}",
+                    color = TvColors.TextMuted,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1
+                )
+                if (userProfile != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(if (userProfile.isVip) TvColors.VipGreen else TvColors.AccentGold)
+                        )
+                        Text(
+                            text = if (userProfile.isVip) "${userProfile.vipDaysLeft}d" else userProfile.username,
+                            color = TvColors.TextSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
+            Text(
+                text = currentDateTime,
+                color = TvColors.TextMuted.copy(alpha = 0.78f),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Normal,
+                maxLines = 1
+            )
         }
     }
 }
@@ -193,6 +230,8 @@ fun HomeCatalogScreen(
     watchHistory: List<WatchProgressItem>,
     filterType: MediaType?,
     isLoading: Boolean,
+    showCategoryTiles: Boolean = false,
+    onOpenCategory: (CatalogSection) -> Unit = {},
     onFocusItem: (CatalogItem) -> Unit,
     onOpenDetail: (CatalogItem) -> Unit,
     onResumeHistory: (WatchProgressItem) -> Unit,
@@ -233,8 +272,18 @@ fun HomeCatalogScreen(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = 12.dp, bottom = 42.dp)
+                contentPadding = PaddingValues(top = 10.dp, bottom = 42.dp)
             ) {
+                // Netflix-style Glassmorphic Category Tiles at the top of Domů
+                if (showCategoryTiles && filteredSections.isNotEmpty()) {
+                    item(key = "category_tiles_row") {
+                        CategoryTilesRow(
+                            sections = filteredSections,
+                            onSelectCategory = onOpenCategory
+                        )
+                    }
+                }
+
                 // Continue Watching ("Pokračovat ve sledování")
                 val relevantHistory = if (filterType == null) {
                     watchHistory
@@ -435,6 +484,178 @@ fun MyListScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryTilesRow(
+    sections: List<CatalogSection>,
+    onSelectCategory: (CatalogSection) -> Unit
+) {
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .tvBringIntoViewContainer(topPadding = 12.dp, bottomPadding = 20.dp)
+            .padding(top = 4.dp, bottom = 10.dp),
+        contentPadding = PaddingValues(horizontal = 32.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(sections, key = { "tile_${it.id}" }) { section ->
+            CategoryTileCard(
+                label = categoryTileShortLabel(section),
+                onClick = { onSelectCategory(section) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun CategoryTileCard(
+    label: String,
+    onClick: () -> Unit
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isFocused) 1.06f else 1.0f,
+        animationSpec = tween(durationMillis = 140),
+        label = "cat_tile_scale"
+    )
+
+    val shape = RoundedCornerShape(12.dp)
+    val bgBrush = if (isFocused) {
+        Brush.verticalGradient(
+            colors = listOf(Color(0x52FFFFFF), Color(0x28FFFFFF))
+        )
+    } else {
+        Brush.verticalGradient(
+            colors = listOf(Color(0x34FFFFFF), Color(0x16FFFFFF))
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .width(154.dp)
+            .height(70.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(shape)
+            .background(bgBrush)
+            .border(
+                width = if (isFocused) 2.5.dp else 1.dp,
+                color = if (isFocused) Color.White else Color(0x2EFFFFFF),
+                shape = shape
+            )
+            .onFocusChanged { isFocused = it.isFocused }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 0.6.sp,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            lineHeight = 16.sp,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+private fun categoryTileShortLabel(section: CatalogSection): String = when (section.id) {
+    "christmas_movies" -> "VÁNOČNÍ"
+    "cz_sk_hits" -> "ČESKÉ HITY"
+    "trending_movies", "top_movies" -> "TRENDY"
+    "trending_series", "top_series" -> "SERIÁLY"
+    "drama_movies" -> "DRAMA"
+    "thriller_movies" -> "THRILLERY"
+    "documentary_movies" -> "DOKUMENTY"
+    "scifi_action" -> "AKČNÍ & SCI-FI"
+    "comedy_movies" -> "KOMEDIE"
+    "recent_movies" -> "NOVINKY"
+    "cz_sk_series" -> "ČESKÉ SERIÁLY"
+    else -> section.title.uppercase()
+}
+
+@Composable
+fun CategoryGridScreen(
+    section: CatalogSection,
+    isExpanding: Boolean,
+    onBack: () -> Unit,
+    onFocusItem: (CatalogItem) -> Unit,
+    onOpenDetail: (CatalogItem) -> Unit
+) {
+    val firstGridFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(section.id) {
+        runCatching { firstGridFocusRequester.requestFocus() }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = 10.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 32.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            TvButton(
+                text = "Zpět",
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                onClick = onBack,
+                paddingValues = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+            )
+            Text(
+                text = section.title,
+                color = Color.White,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
+            Text(
+                text = "(${section.items.size})",
+                color = TvColors.TextMuted,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium
+            )
+            if (isExpanding) {
+                CircularProgressIndicator(
+                    color = TvColors.NetflixRed,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(5),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 32.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            items(section.items.size, key = { idx -> section.items[idx].id }) { idx ->
+                val item = section.items[idx]
+                TvPosterCard(
+                    item = item,
+                    onFocused = onFocusItem,
+                    onClick = onOpenDetail,
+                    modifier = if (idx == 0) Modifier.focusRequester(firstGridFocusRequester) else Modifier
+                )
             }
         }
     }

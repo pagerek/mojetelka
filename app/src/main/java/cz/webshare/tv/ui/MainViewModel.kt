@@ -62,6 +62,8 @@ data class UiState(
     val sections: List<CatalogSection> = emptyList(),
     val isKidsLoading: Boolean = false,
     val kidsSections: List<CatalogSection> = emptyList(),
+    val activeCategorySection: CatalogSection? = null,
+    val isCategoryExpanding: Boolean = false,
     val focusedHeroItem: CatalogItem? = null,
 
     val searchQuery: String = "",
@@ -289,11 +291,48 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             it.copy(
                 activeTab = tab,
                 activeDetailItem = null,
+                activeCategorySection = null,
                 showStreamPickerModal = false
             )
         }
         if (tab == NavTab.KIDS && _uiState.value.kidsSections.isEmpty() && !_uiState.value.isKidsLoading) {
             loadKidsCatalog()
+        }
+    }
+
+    fun openCategory(section: CatalogSection) {
+        _uiState.update {
+            it.copy(
+                activeCategorySection = section,
+                isCategoryExpanding = true
+            )
+        }
+        viewModelScope.launch {
+            val tmdbKey = _uiState.value.preferences.tmdbApiKey
+            val expanded = catalogApi.loadExpandedCategoryItems(
+                sectionId = section.id,
+                tmdbApiKey = tmdbKey,
+                baseItems = section.items
+            )
+            _uiState.update { state ->
+                if (state.activeCategorySection?.id == section.id) {
+                    state.copy(
+                        activeCategorySection = section.copy(items = expanded),
+                        isCategoryExpanding = false
+                    )
+                } else {
+                    state.copy(isCategoryExpanding = false)
+                }
+            }
+        }
+    }
+
+    fun closeCategory() {
+        _uiState.update {
+            it.copy(
+                activeCategorySection = null,
+                isCategoryExpanding = false
+            )
         }
     }
 

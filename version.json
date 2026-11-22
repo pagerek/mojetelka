@@ -1,6 +1,6 @@
 {
-  "versionCode": 13,
-  "versionName": "1.3.8",
+  "versionCode": 14,
+  "versionName": "1.3.9",
   "apkUrl": "https://raw.githubusercontent.com/pagerek/mojetelka/main/WebshareTV.apk",
-  "changelog": "Nová karta Děti s dynamickým Philips Ambilight pozadím, Vánoční filmy jako první kategorie na Domů a přidané žánry Drama, Thriller, Dokumenty a Komedie"
+  "changelog": "Grafické dlaždice kategorií na kartě Domů s rozklikávací mřížkou, čistý filmový detail, animace ovládání přehrávače (nádech/výdech), čistý seek/buffering a datum s časem v horním menu"
 }
