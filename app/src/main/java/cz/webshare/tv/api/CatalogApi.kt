@@ -210,8 +210,17 @@ class CatalogApi(
     suspend fun getMediaDetails(item: CatalogItem, tmdbApiKey: String): MediaDetails =
         withContext(Dispatchers.IO) {
             val cleanKey = tmdbApiKey.trim()
-            if (item.tmdbId != null && cleanKey.isNotEmpty()) {
-                runCatching { getTmdbDetails(item, cleanKey) }.getOrNull()?.let { return@withContext it }
+            if (cleanKey.isNotEmpty()) {
+                val tmdbItem = if (item.tmdbId != null) {
+                    item
+                } else if (!item.imdbId.isNullOrBlank() && item.imdbId.startsWith("tt")) {
+                    runCatching { findTmdbByImdbId(item, cleanKey) }.getOrNull()
+                } else {
+                    null
+                }
+                if (tmdbItem?.tmdbId != null) {
+                    runCatching { getTmdbDetails(tmdbItem, cleanKey) }.getOrNull()?.let { return@withContext it }
+                }
             }
             if (item.imdbId != null && item.imdbId.startsWith("tt")) {
                 runCatching { getCinemetaDetails(item) }.getOrNull()?.let { return@withContext it }
@@ -358,6 +367,22 @@ class CatalogApi(
                 add(CatalogSection("kids_adventure", "Dobrodružství a fantasy", adventure))
             }
         }
+    }
+
+    private fun findTmdbByImdbId(item: CatalogItem, apiKey: String): CatalogItem? {
+        val imdb = item.imdbId ?: return null
+        val json = getJson("$TMDB_BASE/find/$imdb?external_source=imdb_id&language=cs-CZ&api_key=$apiKey")
+            ?: return null
+        val key = if (item.type == MediaType.SERIES) "tv_results" else "movie_results"
+        val obj = json.optJSONArray(key)?.optJSONObject(0) ?: return null
+        val tmdbId = obj.optInt("id", 0).takeIf { it > 0 } ?: return null
+        val posterPath = obj.optString("poster_path", "").takeIf { it.startsWith("/") }
+        val backdropPath = obj.optString("backdrop_path", "").takeIf { it.startsWith("/") }
+        return item.copy(
+            tmdbId = tmdbId,
+            posterUrl = posterPath?.let { "$TMDB_IMG_POSTER$it" } ?: item.posterUrl,
+            backdropUrl = backdropPath?.let { "$TMDB_IMG_BACKDROP$it" } ?: item.backdropUrl
+        )
     }
 
     private fun fetchTmdbList(url: String, defaultType: MediaType): List<CatalogItem> {
@@ -914,14 +939,14 @@ class CatalogApi(
             ),
             CatalogItem(
                 id = "xmas_andel_pane_2005",
-                imdbId = "tt0430880",
+                imdbId = "tt0493107",
                 type = MediaType.MOVIE,
                 title = "Anděl Páně",
                 originalTitle = "Andel Pane",
                 year = 2005,
                 overview = "Popletený anděl Petronel a škodolibý čert Uriáš musí na Štědrý den napravit alespoň jednoho hříšníka.",
-                posterUrl = "https://images.metahub.space/poster/medium/tt0430880/img",
-                backdropUrl = "https://images.metahub.space/background/medium/tt0430880/img",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0493107/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0493107/img",
                 rating = 7.8,
                 genres = listOf("Pohádka", "Komedie", "Vánoční"),
                 runtimeMinutes = 91
@@ -1075,14 +1100,14 @@ class CatalogApi(
             ),
             CatalogItem(
                 id = "kids_andel_pane_2005",
-                imdbId = "tt0430880",
+                imdbId = "tt0493107",
                 type = MediaType.MOVIE,
                 title = "Anděl Páně",
                 originalTitle = "Andel Pane",
                 year = 2005,
                 overview = "Anděl Petronel a čert Uriáš se vydávají na Zem napravit hříšníka.",
-                posterUrl = "https://images.metahub.space/poster/medium/tt0430880/img",
-                backdropUrl = "https://images.metahub.space/background/medium/tt0430880/img",
+                posterUrl = "https://images.metahub.space/poster/medium/tt0493107/img",
+                backdropUrl = "https://images.metahub.space/background/medium/tt0493107/img",
                 rating = 7.8,
                 genres = listOf("Pohádka", "Komedie"),
                 runtimeMinutes = 91

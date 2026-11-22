@@ -8,6 +8,7 @@ import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -60,6 +61,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -87,6 +89,9 @@ import cz.webshare.tv.ui.components.TvButton
 import cz.webshare.tv.ui.components.TvColors
 import cz.webshare.tv.ui.components.TvIconButton
 import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 data class EmbeddedTrackOption(
     val label: String,
@@ -650,6 +655,7 @@ fun VideoPlayerScreen(
                             icon = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Ukončit přehrávání",
                             size = 38.dp,
+                            borderlessInactive = true,
                             onClick = onBack
                         )
                         Column(modifier = Modifier.weight(1f)) {
@@ -687,12 +693,49 @@ fun VideoPlayerScreen(
                         if (session.activeStream.isHevc) add("HEVC")
                         if (session.activeStream.isSurround51) add("5.1")
                     }
-                    if (extraBadges.isNotEmpty()) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            extraBadges.forEach { badge ->
-                                TechBadgePill(
-                                    text = badge,
-                                    backgroundColor = Color(0xDD1E2233)
+                    val clockFormat = remember { SimpleDateFormat("EEE d. M. · HH:mm", Locale("cs", "CZ")) }
+                    val endClockFormat = remember { SimpleDateFormat("HH:mm", Locale("cs", "CZ")) }
+                    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                    LaunchedEffect(showControls) {
+                        while (showControls) {
+                            nowMillis = System.currentTimeMillis()
+                            delay(15_000L)
+                        }
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        if (extraBadges.isNotEmpty()) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                extraBadges.forEach { badge ->
+                                    TechBadgePill(
+                                        text = badge,
+                                        backgroundColor = Color(0xDD1E2233)
+                                    )
+                                }
+                            }
+                        }
+                        Column(
+                            horizontalAlignment = Alignment.End,
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(
+                                text = clockFormat.format(Date(nowMillis)),
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1
+                            )
+                            val remainingForEnd = (durationMs - currentPosMs).coerceAtLeast(0L)
+                            if (durationMs > 0L) {
+                                Text(
+                                    text = "Končí v ${endClockFormat.format(Date(nowMillis + remainingForEnd))}",
+                                    color = TvColors.TextMuted,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    maxLines = 1
                                 )
                             }
                         }
@@ -716,6 +759,7 @@ fun VideoPlayerScreen(
                                 icon = Icons.AutoMirrored.Filled.VolumeUp,
                                 contentDescription = "Zvuk",
                                 size = 38.dp,
+                                borderlessInactive = true,
                                 onClick = { showAudioTrackModal = true }
                             )
 
@@ -723,6 +767,7 @@ fun VideoPlayerScreen(
                                 icon = Icons.Default.Subtitles,
                                 contentDescription = "Titulky",
                                 size = 38.dp,
+                                borderlessInactive = true,
                                 onClick = { showSubtitleTrackModal = true }
                             )
 
@@ -731,6 +776,7 @@ fun VideoPlayerScreen(
                                     icon = Icons.Default.HighQuality,
                                     contentDescription = "Kvalita / Zdroj (${session.activeStream.quality.badge} • ${session.activeStream.language.badge})",
                                     size = 38.dp,
+                                    borderlessInactive = true,
                                     onClick = { showQualityModal = true }
                                 )
                             }
@@ -753,17 +799,19 @@ fun VideoPlayerScreen(
                         (currentPosMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
                     } else 0f
                     val timelineInteraction = remember { MutableInteractionSource() }
+                    val timelineScale by animateFloatAsState(
+                        targetValue = if (isTimelineFocused) 1.02f else 1.0f,
+                        animationSpec = tween(durationMillis = 120),
+                        label = "timeline_scale"
+                    )
 
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isTimelineFocused) Color(0x16FFFFFF) else Color.Transparent)
-                            .border(
-                                width = if (isTimelineFocused) 1.dp else 0.dp,
-                                color = if (isTimelineFocused) Color(0x4DFFFFFF) else Color.Transparent,
-                                shape = RoundedCornerShape(8.dp)
-                            )
+                            .graphicsLayer {
+                                scaleX = timelineScale
+                                scaleY = timelineScale
+                            }
                             .focusRequester(timelineFocusRequester)
                             .onFocusChanged { isTimelineFocused = it.isFocused }
                             .clickable(
@@ -771,7 +819,7 @@ fun VideoPlayerScreen(
                                 indication = null,
                                 onClick = { togglePlayPause() }
                             )
-                            .padding(horizontal = 12.dp, vertical = 9.dp),
+                            .padding(horizontal = 4.dp, vertical = 9.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
@@ -779,7 +827,7 @@ fun VideoPlayerScreen(
                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = if (isPlaying) "Pozastavit" else "Přehrát",
                             tint = if (isTimelineFocused) Color.White else Color(0xFFE5E5E5),
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(if (isTimelineFocused) 24.dp else 21.dp)
                         )
 
                         Text(
@@ -792,14 +840,14 @@ fun VideoPlayerScreen(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(if (isTimelineFocused) 7.dp else 5.dp)
+                                .height(if (isTimelineFocused) 8.dp else 5.dp)
                                 .clip(RoundedCornerShape(4.dp))
-                                .background(Color(0x44FFFFFF))
+                                .background(Color.White.copy(alpha = if (isTimelineFocused) 0.92f else 0.70f))
                         ) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth(progressFraction)
-                                    .height(if (isTimelineFocused) 7.dp else 5.dp)
+                                    .height(if (isTimelineFocused) 8.dp else 5.dp)
                                     .background(TvColors.NetflixRed)
                             )
                         }

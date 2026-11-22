@@ -66,6 +66,7 @@ import cz.webshare.tv.model.UserPreferences
 import cz.webshare.tv.model.WatchProgressItem
 import cz.webshare.tv.model.WebshareUserProfile
 import cz.webshare.tv.ui.NavTab
+import cz.webshare.tv.ui.components.LocalFocusRestoreRegistry
 import cz.webshare.tv.ui.components.TechBadgePill
 import cz.webshare.tv.ui.components.TvButton
 import cz.webshare.tv.ui.components.TvColors
@@ -516,6 +517,8 @@ private fun CategoryTileCard(
     label: String,
     onClick: () -> Unit
 ) {
+    val focusRegistry = LocalFocusRestoreRegistry.current
+    val tileFocusRequester = remember { FocusRequester() }
     var isFocused by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -551,7 +554,13 @@ private fun CategoryTileCard(
                 color = if (isFocused) Color.White else Color(0x2EFFFFFF),
                 shape = shape
             )
-            .onFocusChanged { isFocused = it.isFocused }
+            .focusRequester(tileFocusRequester)
+            .onFocusChanged {
+                isFocused = it.isFocused
+                if (it.isFocused) {
+                    focusRegistry?.lastFocusedRequester = tileFocusRequester
+                }
+            }
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -577,7 +586,8 @@ private fun CategoryTileCard(
 private fun categoryTileShortLabel(section: CatalogSection): String = when (section.id) {
     "christmas_movies" -> "VÁNOČNÍ"
     "cz_sk_hits" -> "ČESKÉ HITY"
-    "trending_movies", "top_movies" -> "TRENDY"
+    "trending_movies" -> "TRENDY"
+    "top_movies" -> "TOP FILMY"
     "trending_series", "top_series" -> "SERIÁLY"
     "drama_movies" -> "DRAMA"
     "thriller_movies" -> "THRILLERY"

@@ -33,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -66,6 +67,12 @@ import cz.webshare.tv.model.CatalogItem
 import cz.webshare.tv.model.MediaType
 import cz.webshare.tv.model.WatchProgressItem
 import kotlinx.coroutines.delay
+
+class FocusRestoreRegistry {
+    var lastFocusedRequester: FocusRequester? = null
+}
+
+val LocalFocusRestoreRegistry = staticCompositionLocalOf<FocusRestoreRegistry?> { null }
 
 object TvColors {
     val Background = Color(0xFF0A0A0A)
@@ -286,6 +293,8 @@ fun TvPosterCard(
     rankNumber: Int? = null
 ) {
     val context = LocalContext.current
+    val focusRegistry = LocalFocusRestoreRegistry.current
+    val cardFocusRequester = remember { FocusRequester() }
     var isFocused by remember { mutableStateOf(false) }
     var imageFailed by remember(item.posterUrl) { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
@@ -321,9 +330,11 @@ fun TvPosterCard(
                 color = if (isFocused) Color.White else Color.Transparent,
                 shape = RoundedCornerShape(6.dp)
             )
+            .focusRequester(cardFocusRequester)
             .onFocusChanged {
                 isFocused = it.isFocused
                 if (it.isFocused) {
+                    focusRegistry?.lastFocusedRequester = cardFocusRequester
                     onFocused(item)
                 }
             }
@@ -463,6 +474,8 @@ fun TvContinueWatchingCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val focusRegistry = LocalFocusRestoreRegistry.current
+    val cardFocusRequester = remember { FocusRequester() }
     var isFocused by remember { mutableStateOf(false) }
     var isHoldingSelect by remember { mutableStateOf(false) }
     var longPressFired by remember { mutableStateOf(false) }
@@ -524,9 +537,12 @@ fun TvContinueWatchingCard(
                     },
                     shape = RoundedCornerShape(10.dp)
                 )
+                .focusRequester(cardFocusRequester)
                 .onFocusChanged {
                     isFocused = it.isFocused
-                    if (!it.isFocused) {
+                    if (it.isFocused) {
+                        focusRegistry?.lastFocusedRequester = cardFocusRequester
+                    } else {
                         isHoldingSelect = false
                     }
                 }
@@ -946,7 +962,8 @@ fun TvIconButton(
     contentDescription: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    size: Dp = 42.dp
+    size: Dp = 42.dp,
+    borderlessInactive: Boolean = false
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
@@ -958,13 +975,28 @@ fun TvIconButton(
     )
 
     val bgColor by animateColorAsState(
-        targetValue = if (isFocused) Color.White else Color(0xFF1A1A1A),
+        targetValue = when {
+            isFocused -> Color.White
+            borderlessInactive -> Color.Transparent
+            else -> Color(0xFF1A1A1A)
+        },
         animationSpec = tween(110),
         label = "icon_btn_bg"
     )
 
     val iconTint = if (isFocused) Color(0xFF0A0A0A) else Color(0xFFE5E5E5)
-    val borderColor = if (isFocused) Color.White else Color(0x33FFFFFF)
+    val borderColor = when {
+        isFocused -> Color.White
+        borderlessInactive -> Color.Transparent
+        else -> Color(0x33FFFFFF)
+    }
+    val borderWidth = if (isFocused) 2.dp else if (borderlessInactive) 0.dp else 1.dp
+
+    val fadeOutBrush = if (borderlessInactive && !isFocused) {
+        Brush.radialGradient(
+            colors = listOf(Color(0x36FFFFFF), Color(0x10FFFFFF), Color.Transparent)
+        )
+    } else null
 
     Box(
         modifier = modifier
@@ -973,9 +1005,18 @@ fun TvIconButton(
                 scaleX = scale
                 scaleY = scale
             }
-            .clip(RoundedCornerShape(8.dp))
-            .background(bgColor)
-            .border(if (isFocused) 2.dp else 1.dp, borderColor, RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(if (borderlessInactive) 50 else 8))
+            .then(
+                if (fadeOutBrush != null) Modifier.background(fadeOutBrush)
+                else Modifier.background(bgColor)
+            )
+            .then(
+                if (borderWidth > 0.dp) {
+                    Modifier.border(borderWidth, borderColor, RoundedCornerShape(if (borderlessInactive) 50 else 8))
+                } else {
+                    Modifier
+                }
+            )
             .onFocusChanged { isFocused = it.isFocused }
             .clickable(
                 interactionSource = interactionSource,
