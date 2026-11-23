@@ -39,7 +39,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Rect
@@ -319,6 +323,7 @@ fun TvPosterCard(
         modifier = modifier
             .width(width)
             .height(height)
+            .tvBringIntoViewPadding(horizontalPadding = 32.dp, topPadding = 0.dp, bottomPadding = 0.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -522,6 +527,7 @@ fun TvContinueWatchingCard(
             modifier = Modifier
                 .width(198.dp)
                 .height(104.dp)
+                .tvBringIntoViewPadding(horizontalPadding = 32.dp, topPadding = 0.dp, bottomPadding = 0.dp)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
@@ -1081,19 +1087,21 @@ fun Modifier.tvBringIntoViewContainer(
 @OptIn(ExperimentalFoundationApi::class)
 fun Modifier.tvBringIntoViewPadding(
     topPadding: Dp = 16.dp,
-    bottomPadding: Dp = 28.dp
+    bottomPadding: Dp = 28.dp,
+    horizontalPadding: Dp = 0.dp
 ): Modifier = composed {
     val density = LocalDensity.current
     val topPx = with(density) { topPadding.toPx() }
     val bottomPx = with(density) { bottomPadding.toPx() }
+    val horizontalPx = with(density) { horizontalPadding.toPx() }
 
-    val responder = remember(topPx, bottomPx) {
+    val responder = remember(topPx, bottomPx, horizontalPx) {
         object : BringIntoViewResponder {
             override fun calculateRectForParent(localRect: Rect): Rect {
                 return Rect(
-                    left = localRect.left,
+                    left = localRect.left - horizontalPx,
                     top = localRect.top - topPx,
-                    right = localRect.right,
+                    right = localRect.right + horizontalPx,
                     bottom = localRect.bottom + bottomPx
                 )
             }
@@ -1104,3 +1112,21 @@ fun Modifier.tvBringIntoViewPadding(
 
     this.bringIntoViewResponder(responder)
 }
+
+/**
+ * Keeps D-Pad focus inside a horizontal row: pressing LEFT/RIGHT on the first/last item (or
+ * while the neighbour is not yet composed) is consumed instead of letting the focus search
+ * escape to an unrelated target such as the top navigation bar.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+fun Modifier.tvTrapHorizontalFocus(): Modifier = this
+    .focusProperties {
+        exit = { direction ->
+            if (direction == FocusDirection.Left || direction == FocusDirection.Right) {
+                FocusRequester.Cancel
+            } else {
+                FocusRequester.Default
+            }
+        }
+    }
+    .focusGroup()

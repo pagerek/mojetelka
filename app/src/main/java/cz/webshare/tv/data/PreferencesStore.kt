@@ -99,6 +99,7 @@ class PreferencesStore(context: Context) {
                         durationMs = obj.optLong("durationMs", 0L),
                         seasonNumber = obj.optInt("seasonNumber", -1).takeIf { it > 0 },
                         episodeNumber = obj.optInt("episodeNumber", -1).takeIf { it > 0 },
+                        isKids = obj.optBoolean("isKids", false),
                         updatedAt = obj.optLong("updatedAt", 0L)
                     )
                 )
@@ -154,6 +155,7 @@ class PreferencesStore(context: Context) {
                     put("durationMs", w.durationMs)
                     if (w.seasonNumber != null) put("seasonNumber", w.seasonNumber)
                     if (w.episodeNumber != null) put("episodeNumber", w.episodeNumber)
+                    put("isKids", w.isKids)
                     put("updatedAt", w.updatedAt)
                 }
             )

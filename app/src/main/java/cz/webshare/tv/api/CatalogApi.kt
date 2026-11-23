@@ -364,7 +364,6 @@ class CatalogApi(
         val adventure = familyAdventureDef.await()
 
         buildList {
-            add(kidsCuratedCzechSection().copy(items = curatedCzKids))
             if (animated.isNotEmpty()) {
                 add(CatalogSection("kids_animated_movies", "Animované a rodinné filmy", animated))
             }
@@ -374,6 +373,7 @@ class CatalogApi(
             if (adventure.isNotEmpty()) {
                 add(CatalogSection("kids_adventure", "Dobrodružství a fantasy", adventure))
             }
+            add(kidsCuratedCzechSection().copy(items = curatedCzKids))
         }
     }
 
@@ -648,7 +648,6 @@ class CatalogApi(
         val animatedSeries = mergeUniqueCatalogItems(kidsCuratedSeriesSection().items, animatedSeriesDef.await())
 
         buildList {
-            add(kidsCuratedCzechSection())
             if (animatedMovies.isNotEmpty()) {
                 add(CatalogSection("kids_animated_movies", "Animované a rodinné filmy", animatedMovies))
             }
@@ -658,6 +657,7 @@ class CatalogApi(
             if (animatedSeries.isNotEmpty()) {
                 add(CatalogSection("kids_series", "Dětské a rodinné seriály", animatedSeries))
             }
+            add(kidsCuratedCzechSection())
         }
     }
 

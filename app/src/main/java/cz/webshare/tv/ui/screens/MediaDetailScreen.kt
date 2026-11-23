@@ -33,10 +33,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -52,14 +55,15 @@ import cz.webshare.tv.model.MediaDetails
 import cz.webshare.tv.model.MediaType
 import cz.webshare.tv.model.ParsedStream
 import cz.webshare.tv.model.StreamResolutionResult
-import cz.webshare.tv.model.UserPreferences
 import cz.webshare.tv.ui.components.TechBadgePill
 import cz.webshare.tv.ui.components.TvButton
 import cz.webshare.tv.ui.components.TvColors
 import cz.webshare.tv.ui.components.TvIconButton
 import cz.webshare.tv.ui.components.tvBringIntoViewContainer
 import cz.webshare.tv.ui.components.tvBringIntoViewPadding
+import cz.webshare.tv.ui.components.tvTrapHorizontalFocus
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun MediaDetailScreen(
     details: MediaDetails,
@@ -70,7 +74,6 @@ fun MediaDetailScreen(
     streamError: String?,
     showStreamPickerModal: Boolean,
     isInMyList: Boolean,
-    preferences: UserPreferences,
     onBack: () -> Unit,
     onPrimaryPlay: () -> Unit,
     onOpenStreamPicker: () -> Unit,
@@ -133,7 +136,12 @@ fun MediaDetailScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 46.dp),
+                .padding(horizontal = 46.dp)
+                .focusGroup()
+                .then(
+                    if (showStreamPickerModal) Modifier.focusProperties { canFocus = false }
+                    else Modifier
+                ),
             contentPadding = PaddingValues(top = 24.dp, bottom = 56.dp)
         ) {
             item {
@@ -344,7 +352,11 @@ fun MediaDetailScreen(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         // Season Tabs
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        LazyRow(
+                            modifier = Modifier.tvTrapHorizontalFocus(),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
                             items(details.seasons, key = { it.seasonNumber }) { season ->
                                 TvButton(
                                     text = "${season.name} (${season.episodeCount})",

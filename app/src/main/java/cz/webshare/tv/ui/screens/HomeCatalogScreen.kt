@@ -73,6 +73,8 @@ import cz.webshare.tv.ui.components.TvColors
 import cz.webshare.tv.ui.components.TvContinueWatchingCard
 import cz.webshare.tv.ui.components.TvNavTabItem
 import cz.webshare.tv.ui.components.tvBringIntoViewContainer
+import cz.webshare.tv.ui.components.tvBringIntoViewPadding
+import cz.webshare.tv.ui.components.tvTrapHorizontalFocus
 import cz.webshare.tv.ui.components.TvPosterCard
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
@@ -328,6 +330,7 @@ fun HomeCatalogScreen(
                                 )
                             }
                             LazyRow(
+                                modifier = Modifier.tvTrapHorizontalFocus(),
                                 contentPadding = PaddingValues(horizontal = 32.dp, vertical = 4.dp),
                                 horizontalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
@@ -370,6 +373,7 @@ fun HomeCatalogScreen(
                             modifier = Modifier.padding(horizontal = 32.dp, vertical = 4.dp)
                         )
                         LazyRow(
+                            modifier = Modifier.tvTrapHorizontalFocus(),
                             contentPadding = PaddingValues(horizontal = 32.dp, vertical = 6.dp),
                             horizontalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
@@ -412,9 +416,7 @@ fun MyListScreen(
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 28.dp),
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(top = 12.dp, bottom = 36.dp)
         ) {
             if (watchHistory.isNotEmpty()) {
@@ -428,6 +430,7 @@ fun MyListScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .padding(horizontal = 32.dp)
                                 .padding(bottom = 8.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
@@ -444,7 +447,11 @@ fun MyListScreen(
                                 fontSize = 12.sp
                             )
                         }
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        LazyRow(
+                            modifier = Modifier.tvTrapHorizontalFocus(),
+                            contentPadding = PaddingValues(horizontal = 32.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
                             itemsIndexed(
                                 watchHistory,
                                 key = { _, it -> "${it.mediaId}_${it.seasonNumber}_${it.episodeNumber}" }
@@ -482,14 +489,16 @@ fun MyListScreen(
                         color = Color.White,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 8.dp)
+                        modifier = Modifier
+                            .padding(horizontal = 32.dp)
+                            .padding(bottom = 8.dp)
                     )
 
                     if (myList.isEmpty()) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 32.dp),
+                                .padding(horizontal = 32.dp, vertical = 32.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -500,8 +509,9 @@ fun MyListScreen(
                         }
                     } else {
                         LazyRow(
+                            modifier = Modifier.tvTrapHorizontalFocus(),
                             horizontalArrangement = Arrangement.spacedBy(14.dp),
-                            contentPadding = PaddingValues(vertical = 6.dp)
+                            contentPadding = PaddingValues(horizontal = 32.dp, vertical = 6.dp)
                         ) {
                             itemsIndexed(myList, key = { _, it -> it.id }) { idx, item ->
                                 val cardMod = if (watchHistory.isEmpty() && idx == 0 && contentFocusRequester != null) {
@@ -532,6 +542,7 @@ private fun CategoryTilesRow(
 ) {
     LazyRow(
         modifier = Modifier
+            .tvTrapHorizontalFocus()
             .fillMaxWidth()
             .tvBringIntoViewContainer(topPadding = 12.dp, bottomPadding = 20.dp)
             .padding(top = 4.dp, bottom = 10.dp),
@@ -584,6 +595,7 @@ private fun CategoryTileCard(
         modifier = modifier
             .width(154.dp)
             .height(70.dp)
+            .tvBringIntoViewPadding(horizontalPadding = 32.dp, topPadding = 0.dp, bottomPadding = 0.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -701,12 +713,19 @@ fun CategoryGridScreen(
         ) {
             items(section.items.size, key = { idx -> section.items[idx].id }) { idx ->
                 val item = section.items[idx]
-                TvPosterCard(
-                    item = item,
-                    onFocused = onFocusItem,
-                    onClick = onOpenDetail,
-                    modifier = if (idx == 0) Modifier.focusRequester(firstGridFocusRequester) else Modifier
-                )
+                Box(
+                    modifier = Modifier.tvBringIntoViewPadding(
+                        topPadding = 14.dp,
+                        bottomPadding = 18.dp
+                    )
+                ) {
+                    TvPosterCard(
+                        item = item,
+                        onFocused = onFocusItem,
+                        onClick = onOpenDetail,
+                        modifier = if (idx == 0) Modifier.focusRequester(firstGridFocusRequester) else Modifier
+                    )
+                }
             }
         }
     }

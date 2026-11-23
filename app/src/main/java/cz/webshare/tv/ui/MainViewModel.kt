@@ -47,7 +47,8 @@ data class ActivePlaybackSession(
     val directVideoUrl: String,
     val resolutionResult: StreamResolutionResult?,
     val startPositionMs: Long = 0L,
-    val bannerMessage: String? = null
+    val bannerMessage: String? = null,
+    val isKids: Boolean = false
 )
 
 data class UiState(
@@ -660,7 +661,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             resolutionResult = resolution,
                             startPositionMs = savedProgress?.positionMs ?: 0L,
                             bannerMessage = bannerMessage
-                                ?: "${stream.language.badge} • ${stream.quality.badge} (${stream.file.formattedSize})"
+                                ?: "${stream.language.badge} • ${stream.quality.badge} (${stream.file.formattedSize})",
+                            isKids = _uiState.value.activeTab == NavTab.KIDS
                         )
                     )
                 }
@@ -682,7 +684,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                     directVideoUrl = fallbackUrl,
                                     resolutionResult = resolution,
                                     startPositionMs = 0L,
-                                    bannerMessage = "Primární soubor nebyl dostupný → Automatický fallback na ${fallbackStream.language.badge} • ${fallbackStream.quality.badge}"
+                                    bannerMessage = "Primární soubor nebyl dostupný → Automatický fallback na ${fallbackStream.language.badge} • ${fallbackStream.quality.badge}",
+                                    isKids = _uiState.value.activeTab == NavTab.KIDS
                                 )
                             )
                         }
@@ -808,7 +811,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 "Spuštěno od začátku"
                             } else {
                                 "Pokračování od ${historyItem.formattedPosition}"
-                            }
+                            },
+                            isKids = historyItem.isKids || _uiState.value.activeTab == NavTab.KIDS
                         )
                     )
                 }
@@ -870,7 +874,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 positionMs = positionMs,
                 durationMs = durationMs,
                 seasonNumber = session.episode?.seasonNumber,
-                episodeNumber = session.episode?.episodeNumber
+                episodeNumber = session.episode?.episodeNumber,
+                isKids = session.isKids
             )
             prefsStore.saveWatchProgress(progressItem)
             val updatedHistory = prefsStore.getWatchHistory()

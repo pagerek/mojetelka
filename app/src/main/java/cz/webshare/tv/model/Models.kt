@@ -222,6 +222,7 @@ data class WatchProgressItem(
     val durationMs: Long,
     val seasonNumber: Int? = null,
     val episodeNumber: Int? = null,
+    val isKids: Boolean = false,
     val updatedAt: Long = System.currentTimeMillis()
 ) {
     val progressFraction: Float

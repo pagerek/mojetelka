@@ -277,7 +277,7 @@ fun WebshareTvApp(viewModel: MainViewModel) {
                                 NavTab.KIDS -> {
                                     HomeCatalogScreen(
                                         sections = state.kidsSections,
-                                        watchHistory = emptyList(),
+                                        watchHistory = state.watchHistory.filter { it.isKids },
                                         filterType = null,
                                         isLoading = state.isKidsLoading,
                                         contentFocusRequester = tabContentFocusRequesters[NavTab.KIDS],
@@ -387,7 +387,6 @@ fun WebshareTvApp(viewModel: MainViewModel) {
                             streamError = state.streamError,
                             showStreamPickerModal = state.showStreamPickerModal,
                             isInMyList = inMyList,
-                            preferences = state.preferences,
                             onBack = { viewModel.closeMediaDetail() },
                             onPrimaryPlay = { viewModel.onPrimaryPlayClicked() },
                             onOpenStreamPicker = { viewModel.openStreamPickerModal() },

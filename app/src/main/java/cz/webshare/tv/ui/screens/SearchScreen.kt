@@ -59,6 +59,7 @@ import cz.webshare.tv.ui.components.TechBadgePill
 import cz.webshare.tv.ui.components.TvButton
 import cz.webshare.tv.ui.components.TvColors
 import cz.webshare.tv.ui.components.tvBringIntoViewPadding
+import cz.webshare.tv.ui.components.tvTrapHorizontalFocus
 import cz.webshare.tv.ui.components.TvPosterCard
 import kotlinx.coroutines.delay
 
@@ -337,6 +338,8 @@ fun SearchScreen(
                     modifier = Modifier.padding(end = 8.dp)
                 )
                 LazyRow(
+                    modifier = Modifier.tvTrapHorizontalFocus(),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(QUICK_SEARCH_TIPS) { tip ->
@@ -400,7 +403,7 @@ fun SearchScreen(
                         columns = GridCells.Adaptive(minSize = 136.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        contentPadding = PaddingValues(top = 8.dp, bottom = 40.dp),
+                        contentPadding = PaddingValues(start = 8.dp, top = 8.dp, end = 8.dp, bottom = 40.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
                         items(results, key = { it.id }) { item ->
