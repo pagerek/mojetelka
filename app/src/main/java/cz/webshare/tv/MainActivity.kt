@@ -137,14 +137,13 @@ fun WebshareTvApp(viewModel: MainViewModel) {
 
                 // 1. Main Netflix-style Shell (kept mounted so scroll & focus survive Detail/Player overlays)
                 Box(
-                    modifier = if (hasOverlay) {
-                        Modifier
-                            .fillMaxSize()
-                            .focusGroup()
-                            .focusProperties { canFocus = false }
-                    } else {
-                        Modifier.fillMaxSize()
-                    }
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .focusGroup()
+                        .then(
+                            if (hasOverlay) Modifier.focusProperties { canFocus = false }
+                            else Modifier
+                        )
                 ) {
                     val targetTint = when (state.activeTab) {
                         NavTab.HOME -> Color(0xFF280B10)      // Subtle crimson

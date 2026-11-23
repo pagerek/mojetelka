@@ -219,6 +219,16 @@ fun VideoPlayerScreen(
         }
     }
 
+    val clockFormat = remember { SimpleDateFormat("EEE d. M. · HH:mm", Locale("cs", "CZ")) }
+    val endClockFormat = remember { SimpleDateFormat("HH:mm", Locale("cs", "CZ")) }
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(showControls) {
+        while (showControls) {
+            nowMillis = System.currentTimeMillis()
+            delay(15_000L)
+        }
+    }
+
     // Listen to player events & extract embedded audio/subtitle tracks
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
@@ -693,16 +703,6 @@ fun VideoPlayerScreen(
                         if (session.activeStream.isHevc) add("HEVC")
                         if (session.activeStream.isSurround51) add("5.1")
                     }
-                    val clockFormat = remember { SimpleDateFormat("EEE d. M. · HH:mm", Locale("cs", "CZ")) }
-                    val endClockFormat = remember { SimpleDateFormat("HH:mm", Locale("cs", "CZ")) }
-                    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
-                    LaunchedEffect(showControls) {
-                        while (showControls) {
-                            nowMillis = System.currentTimeMillis()
-                            delay(15_000L)
-                        }
-                    }
-
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(14.dp)
@@ -722,7 +722,7 @@ fun VideoPlayerScreen(
                             verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             Text(
-                                text = clockFormat.format(Date(nowMillis)),
+                                text = runCatching { clockFormat.format(Date(nowMillis)) }.getOrDefault(""),
                                 color = Color.White.copy(alpha = 0.85f),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
@@ -730,13 +730,18 @@ fun VideoPlayerScreen(
                             )
                             val remainingForEnd = (durationMs - currentPosMs).coerceAtLeast(0L)
                             if (durationMs > 0L) {
-                                Text(
-                                    text = "Končí v ${endClockFormat.format(Date(nowMillis + remainingForEnd))}",
-                                    color = TvColors.TextMuted,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Normal,
-                                    maxLines = 1
-                                )
+                                val endStr = runCatching {
+                                    endClockFormat.format(Date(nowMillis + remainingForEnd))
+                                }.getOrNull()
+                                if (endStr != null) {
+                                    Text(
+                                        text = "Končí v $endStr",
+                                        color = TvColors.TextMuted,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        maxLines = 1
+                                    )
+                                }
                             }
                         }
                     }
